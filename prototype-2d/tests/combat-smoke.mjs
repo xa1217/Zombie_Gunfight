@@ -70,7 +70,10 @@ function assertResidentPopulation(api) {
 }
 assertResidentPopulation(debug)
 assert.equal(debug.snapshot().build.slots.length, 2)
-assert.equal((page.elements.get("skillDock").innerHTML.match(/class="skill-slot /g) || []).length, 7)
+assert(page.elements.has("grenadeButton"), "the grenade use button is present")
+assert(page.elements.has("molotovButton"), "the molotov use button is present")
+assert(!page.elements.has("skillDock") || page.elements.get("skillDock").hidden || page.elements.get("skillDock").style.display === "none",
+  "the retired bottom item dock is removed or hidden")
 assert.equal(debug.config.runSeconds, 300)
 assert.equal(debug.snapshot().nextXp, 5)
 assert.equal(debug.state.enemies.every(enemy => enemy.type === "walker" && enemy.speed === 38), true)
@@ -89,7 +92,7 @@ page.key("Space", false)
 assert.ok(debug.snapshot().stats.shots > 0)
 assert.ok(debug.snapshot().stats.hits > 0)
 assert.ok(debug.snapshot().kills > 0)
-console.log("PASS real page script starts with two skills, seven dock slots, random slow residents, manual rifle shots and hits")
+console.log("PASS real page script starts with two skills, separate throwable buttons, random slow residents, manual rifle shots and hits")
 
 const beforeMove = debug.snapshot().player
 page.key("KeyD")

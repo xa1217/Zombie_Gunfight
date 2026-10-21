@@ -1,0 +1,50 @@
+name: 并行制作任务
+description: 为创作者或 AI Agent 认领一块互斥的工作范围
+title: "[Task] "
+labels: ["task"]
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: 单一目标
+      description: 写成一个可验收结果。
+    validations:
+      required: true
+  - type: textarea
+    id: write-scope
+    attributes:
+      label: 独占写入范围
+      description: 列出本任务允许修改的文件或目录；必须与其他进行中任务互斥。
+      placeholder: |
+        prototype-2d/index.html
+        prototype-2d/skills.js
+    validations:
+      required: true
+  - type: textarea
+    id: read-only
+    attributes:
+      label: 只读依赖
+      description: 可以阅读但不修改的文件或模块。
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 验收方式
+      description: 命令、截图或可观察行为。
+    validations:
+      required: true
+  - type: input
+    id: branch
+    attributes:
+      label: 任务分支
+      placeholder: work/creator-a/zombie-vfx
+    validations:
+      required: true
+  - type: dropdown
+    id: contract
+    attributes:
+      label: 是否修改共享契约
+      options:
+        - 否
+        - 是，已锁定相关路径并通知其他任务
+    validations:
+      required: true

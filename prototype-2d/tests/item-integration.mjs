@@ -44,120 +44,19 @@ function collect(page, id, consumable = false) {
   assert.ok(![...debug.loot, ...debug.combatDrops].some(entry => entry.id === item.id), `${id}: pickup is consumed once`);
   return item;
 }
-function launch(id, { angle = 0, moving = false } = {}) {
-  const page = quietPage(), state = page.debug.state;
-  collect(page, id);
-  state.player.fireTimer = Infinity;
-  const target = { ...page.enemyTemplate, x: state.player.x + Math.cos(angle) * 95,
-    y: state.player.y + Math.sin(angle) * 95,
-    hp: 10000, maxHp: 10000, speed: 0, baseSpeed: 0, radius: 10,
-    contactTimer: Infinity, dead: false, burn: 0, burnLevel: 0, burnTimer: Infinity };
-  state.enemies = [target];
-  state.player[`${id}Timer`] = 0;
-  if (moving) page.key("KeyD");
-  page.debug.step(dt);
-  if (moving) {
-    page.key("KeyD", false);
-    assert.ok(state.player.movingSpeed > 1 && state.player.gait > 0, "the launch takes place during real movement");
+test("manual grenade and molotov button uses create their real effects", () => {
+  for (const id of ["grenade", "molotov"]) {
+    const page = quietPage(), state = page.debug.state;
+    collect(page, id);
+    assert.equal(state.throwables[id], 1, `${id} pickup goes into one-shot inventory`);
+    assert.equal(page.debug.useThrowable(id), true, `${id} button use succeeds`);
+    assert.equal(state.throwables[id], 0, `${id} button use consumes exactly one charge`);
+    assert.equal(state.player.throwKind, id, `${id} keeps its throw animation kind`);
+    assert.ok(state.player.throwAction > 0, `${id} starts the throw action`);
+    page.debug.step(.5);
+    if (id === "grenade") assert.ok(state.explosions.some(effect => effect.kind === "grenade"), "grenade creates an explosion");
+    if (id === "molotov") assert.ok(state.fireZones.length > 0, "molotov creates a fire zone");
   }
-  state.player[`${id}Timer`] = Infinity;
-  assert.equal(state.player.throwKind, id, `${id}: the acquired passive actually activates`);
-  assert.ok(state.player.throwAction > 0, `${id}: the use animation starts`);
-  return { page, state, target };
-}
-
-test("extinguisher suppresses overlapping fire only inside its cone, slows 40% for five seconds and prevents reignition", () => {
-  const { page, state, target } = launch("extinguisher");
-  const zone = state.extinguisherZones[0];
-  assert.ok(zone, "held extinguisher starts a spray field instead of an airborne projectile");
-  assert.equal(state.throwableProjectiles.length, 0);
-  near(zone.life, 5, "initial spray life"); near(zone.duration, 5, "spray duration");
-  near(zone.slowMultiplier, .6, "40% slow leaves 60% movement speed");
-  const position = (radius, offset = 0) => ({ x: zone.x + Math.cos(zone.angle + offset) * radius,
-    y: zone.y + Math.sin(zone.angle + offset) * radius });
-  // Keep the intended target closest so automatic aim cannot turn the nozzle
-  // toward a side/rear fixture during this directional-effect check.
-  Object.assign(target, position(45), { burn: 3, burnLevel: 2, burnTimer: Infinity });
-  const rear = { ...target, ...position(105, Math.PI), id: target.id + 10000 };
-  const side = { ...target, ...position(120, Math.PI / 2), id: target.id + 20000 };
-  state.enemies = [target, rear, side];
-  const fires = [position(65), position(65, Math.PI), position(90, Math.PI / 2), position(zone.radius + 65)]
-    .map((point, id) => ({ ...point, id, kind: "molotov", radius: 8, life: 20, level: 1, tick: Infinity }));
-  const spanningFire = fires[0];
-  spanningFire.radius = 140; spanningFire.tick = .05;
-  state.fireZones = fires;
-  page.debug.step(.3);
-  assert.ok(state.fireZones.includes(spanningFire) && spanningFire.life > 0, "a partially sprayed fire field keeps its unsprayed fuel");
-  assert.ok(spanningFire.suppressed?.length > 0, "the fire remembers the extinguished fan area");
-  for (const fire of fires.slice(1)) {
-    assert.ok(state.fireZones.includes(fire) && fire.life > 0, "side/rear/out-of-range fire is preserved");
-    assert.ok(!fire.suppressed?.length, "an independent fire outside the spray is not marked as suppressed");
-  }
-  assert.equal(target.burn, 0); assert.equal(target.burnLevel, 0);
-  assert.ok(rear.burn > 2.6 && side.burn > 0, "burning targets outside the cone stay burning");
-  assert.ok(target.hp < 10000, "spray keeps its existing light periodic damage");
-  assert.equal(rear.hp, 10000);
-  assert.ok(side.hp < 10000, "the unsprayed side of the same fire still deals damage");
-  near(target.trapSlow, .6, "target slow multiplier");
-  assert.ok(target.trapTimer > 0, "standing in spray refreshes the movement effect");
-  target.baseSpeed = 20;
-  page.debug.step(dt);
-  near(target.speed / (target.baseSpeed * (1 + Math.min(.85, state.time / 240))), .6, "actual enemy movement uses 60% speed");
-  target.baseSpeed = 0;
-  page.debug.step(4.5);
-  assert.ok(state.extinguisherZones.includes(zone) && zone.life > 0, "the original field survives until close to five seconds");
-  page.debug.step(.3);
-  assert.equal(state.extinguisherZones.length, 0, "the field expires and does not refresh without another use");
-  page.debug.step(.6);
-  assert.equal(target.trapSlow, 0, "movement recovers after the remaining slow expires");
-  const hpAfterSpray = target.hp, sideAfterSpray = side.hp;
-  page.debug.step(1.2);
-  assert.equal(target.burn, 0, "suppressed fuel does not reignite when the foam expires");
-  near(target.hp, hpAfterSpray, "the sprayed part of the original fire no longer damages targets");
-  assert.ok(side.burn > 0 && side.hp < sideAfterSpray, "unsprayed fuel keeps burning after the foam expires");
-  page.debug.step(Math.max(.01, spanningFire.life - .2));
-  assert.ok(state.fireZones.includes(spanningFire), "the remaining fire keeps its original lifetime");
-  assert.equal(target.burn, 0);
-  near(target.hp, hpAfterSpray, "extinguished fuel stays extinguished until the original fire ends");
-  page.debug.step(.3);
-  assert.ok(!state.fireZones.includes(spanningFire), "the original fire eventually expires normally");
-});
-
-test("spray side, arc and corner contact use the actual fan boundary for fire and zombie bodies", () => {
-  const { page, state, target } = launch("extinguisher"), zone = state.extinguisherZones[0];
-  const position = (radius, offset = 0) => ({ x: zone.x + Math.cos(zone.angle + offset) * radius,
-    y: zone.y + Math.sin(zone.angle + offset) * radius });
-  Object.assign(target, position(45));
-  const fixtures = [
-    { label: "side overlap", radius: 100, angle: zone.halfAngle + .04, intersects: true },
-    { label: "arc overlap", radius: zone.radius + 5, angle: 0, intersects: true },
-    { label: "corner overlap", radius: zone.radius + 4, angle: zone.halfAngle + .025, intersects: true },
-    { label: "outside side", radius: 100, angle: zone.halfAngle + .1, intersects: false },
-    { label: "outside arc", radius: zone.radius + 9, angle: 0, intersects: false },
-    { label: "outside corner", radius: zone.radius + 7, angle: zone.halfAngle + .04, intersects: false }
-  ];
-  const fires = fixtures.map((fixture, id) => ({ ...position(fixture.radius, fixture.angle),
-    id, kind: "molotov", radius: 8, life: 20, level: 1, tick: Infinity }));
-  state.fireZones = fires;
-  const touching = { ...target, ...position(zone.radius + 5), id: target.id + 10000,
-    burn: 3, burnLevel: 2, burnTimer: Infinity };
-  const outsideCorner = { ...target, ...position(zone.radius + 8, zone.halfAngle + .05),
-    id: target.id + 20000, burn: 3, burnLevel: 2, burnTimer: Infinity };
-  state.enemies = [target, touching, outsideCorner];
-  const endpoint = position(zone.radius, zone.halfAngle);
-  assert.ok(distance(outsideCorner, endpoint) > outsideCorner.radius,
-    "the corner fixture has no actual body contact with the fan endpoint");
-  page.debug.step(.1);
-  for (let i = 0; i < fixtures.length; i++) {
-    assert.ok(state.fireZones.includes(fires[i]), `${fixtures[i].label}: the fire field is retained`);
-    assert.equal(Boolean(fires[i].suppressed?.length), fixtures[i].intersects,
-      `${fixtures[i].label}: suppression follows actual circle/sector contact even when the fire center is outside`);
-  }
-  assert.ok(touching.hp < 10000 && touching.trapTimer > 0, "a zombie body intersecting the arc receives spray");
-  assert.equal(touching.burn, 0);
-  assert.equal(outsideCorner.hp, 10000, "the square outside the curved fan corner receives no damage");
-  assert.ok(!(outsideCorner.trapTimer > 0), "a body outside the fan receives no slow");
-  assert.ok(outsideCorner.burn > 2.8, "a body outside the fan does not have its burn cleared");
 });
 
 function recordingCanvas() {
@@ -211,9 +110,9 @@ test("item actions move the existing support arm, preserve all bone lengths and 
   const images = Object.fromEntries(Object.values(manifest.characters).filter(character => character.image)
     .map(character => [character.image, { width: character.imageWidth, height: character.imageHeight }]));
   const renderer = core.createRenderer({ image: { width: manifest.width, height: manifest.height }, images, manifest });
-  for (const kind of ["grenade", "molotov", "bearTrap", "extinguisher"]) for (let i = 0; i <= 32; i++) {
+  for (const kind of ["grenade", "molotov"]) for (let i = 0; i <= 32; i++) {
     const angle = -Math.PI + i / 32 * Math.PI * 2;
-    const duration = kind === "extinguisher" ? .3 : .38;
+    const duration = .38;
     for (const progress of [.15, .5, 1]) {
       const actor = { x: 120, y: 240, armAngle: angle, gait: .7, gaitPhase: .9,
         recoil: .25, throwKind: kind, throwAction: duration * progress };
@@ -241,107 +140,30 @@ test("item actions move the existing support arm, preserve all bone lengths and 
   }
 });
 
-test("automatic releases stay connected to the hand or extinguisher nozzle in every direction and during movement", () => {
+test("manual grenade and molotov releases stay connected to the support hand", () => {
   const directions = [0, Math.PI, -Math.PI / 2, Math.PI / 2].map(angle => ({ angle }));
-  directions.push({ angle: Math.PI * .8, moving: true });
-  for (const id of ["grenade", "molotov", "bearTrap", "extinguisher"]) for (const direction of directions) {
-    const { state } = launch(id, direction), player = state.player;
+  for (const id of ["grenade", "molotov"]) for (const direction of directions) {
+    const { page, state } = quietPage(), player = state.player;
+    collect(page, id);
+    player.armAngle = direction.angle;
+    assert.equal(page.debug.useThrowable(id), true, `${id}: button use succeeds`);
     const hand = core.pose("hero", player).arms[0].end;
-    const release = id === "extinguisher" ? state.extinguisherZones[0] : state.throwableProjectiles[0];
-    assert.ok(release, `${id}: real gameplay creates a release object`);
-    // The held extinguisher image registers its hose grip at this hand; its
-    // nozzle is 4.8px farther along the aim direction. Thrown objects use the palm.
-    const nozzleOffset = id === "extinguisher" ? 4.8 : 0;
-    if (id === "extinguisher") near(release.angle, player.armAngle, "the nozzle and spray face the same direction");
-    samePoint({ x: release.x, y: release.y }, {
-      x: player.x + hand.x + Math.cos(player.armAngle) * nozzleOffset,
-      y: player.y + hand.y + Math.sin(player.armAngle) * nozzleOffset
-    }, `${id} world release matches the renderer's hand/nozzle anchor`);
-  }
-});
-
-test("four ready tools use one support hand in sequence without interrupting the previous gesture", () => {
-  const page = quietPage(), state = page.debug.state, player = state.player;
-  const ids = ["grenade", "molotov", "bearTrap", "extinguisher"];
-  for (const id of ids) collect(page, id);
-  const target = { ...page.enemyTemplate, x: player.x + 95, y: player.y,
-    hp: 10000, maxHp: 10000, speed: 0, baseSpeed: 0, radius: 10,
-    contactTimer: Infinity, dead: false, burn: 0, burnLevel: 0, burnTimer: Infinity };
-  state.enemies = [target];
-  for (const id of ids) player[`${id}Timer`] = 0;
-  const seen = new Set(), releases = [];
-  for (let frame = 0; frame < 120; frame++) {
-    const previousAction = player.throwAction, previousKind = player.throwKind;
-    page.debug.step(dt);
-    const created = [...state.throwableProjectiles, ...state.extinguisherZones]
-      .filter(release => !seen.has(release));
-    assert.ok(created.length <= 1, "one hand cannot release multiple tools in the same frame");
-    if (previousAction > dt + 1e-7) {
-      assert.equal(created.length, 0, "ready tools wait while the support hand is occupied");
-      assert.equal(player.throwKind, previousKind, "waiting tools do not overwrite the active gesture");
-      near(player.throwAction, previousAction - dt, "the current action continues its own countdown");
-    }
-    for (const release of created) {
-      seen.add(release);
-      assert.ok(previousAction <= dt + 1e-7, "the previous gesture finishes before another use starts");
-      assert.equal(player.throwKind, release.kind, "the visible gesture belongs to the tool actually released");
-      const hand = core.pose("hero", player).arms[0].end;
-      const nozzleOffset = release.kind === "extinguisher" ? 4.8 : 0;
-      samePoint(release, {
-        x: player.x + hand.x + Math.cos(player.armAngle) * nozzleOffset,
-        y: player.y + hand.y + Math.sin(player.armAngle) * nozzleOffset
-      }, `${release.kind}: sequential release stays connected to the hand/nozzle`);
-      releases.push(release.kind);
-    }
-  }
-  assert.equal(releases.length, 4, "every ready tool activates exactly once in the short sequence");
-  assert.deepEqual([...releases].sort(), [...ids].sort(), "no ready tool is lost while it waits for the hand");
-  assert.equal(player.throwAction, 0, "the last tool also finishes and frees the hand");
-});
-
-test("the extinguisher use is brief and the support arm returns continuously while the foam remains", () => {
-  const { page, state } = launch("extinguisher"), player = state.player;
-  near(player.throwAction, .3, "spraying starts a 0.3-second hand gesture");
-  page.debug.step(.15);
-  assert.ok(player.throwAction > .14 && player.throwAction < .16, "the gesture counts down with the real player update");
-  page.debug.step(.17);
-  assert.equal(player.throwAction, 0, "the hand is free again after the short emission");
-  assert.ok(state.extinguisherZones[0]?.life > 4.6, "the lingering foam does not keep the arm extended");
-  for (let i = 0; i <= 32; i++) {
-    const actor = { armAngle: -Math.PI + i / 32 * Math.PI * 2, gait: .7,
-      gaitPhase: .9, throwKind: "extinguisher", throwAction: 0 };
-    const rest = core.pose("hero", actor).arms[0];
-    const beforeEnd = core.pose("hero", { ...actor, throwAction: .000001 }).arms[0];
-    for (const joint of ["joint", "end"])
-      assert.ok(boneDistance(beforeEnd[joint], rest[joint]) < .001, "elbow and hand approach their normal pose without a final-frame snap");
-    const beforeRetraction = core.pose("hero", { ...actor, throwAction: .120001 }).arms[0];
-    const afterRetraction = core.pose("hero", { ...actor, throwAction: .119999 }).arms[0];
-    for (const joint of ["joint", "end"])
-      assert.ok(boneDistance(beforeRetraction[joint], afterRetraction[joint]) < .001, "the hand enters retraction without a pose discontinuity");
+    const release = state.throwableProjectiles[0];
+    assert.ok(release, `${id}: real gameplay creates a thrown object`);
+    samePoint(release, { x: player.x + hand.x, y: player.y + hand.y }, `${id} release matches hand anchor`);
   }
 });
 
 const imageSources = html => [...html.matchAll(/<img\b[^>]*\bsrc="([^"]+)"/g)].map(match => match[1]);
-test("all existing item IDs are covered and unavailable images retain correct HUD symbols after pickups and firearm swaps", () => {
+test("grenade/molotov controls replace the old dock while firearm pickups remain usable", () => {
   const page = quietPage();
-  const expected = new Set([...page.skills.all.map(skill => skill.id), "submachineGun", "shotgun",
-    "invulnerableBurst", "fireRateOverdrive", "ammoOvercharge"]);
-  assert.equal(expected.size, 23);
-  assert.deepEqual([...itemArt.ids].sort(), [...expected].sort());
+  assert(page.elements.has("grenadeButton"), "grenade button is present");
+  assert(page.elements.has("molotovButton"), "molotov button is present");
+  assert(!page.elements.has("skillDock") || page.elements.get("skillDock").hidden || page.elements.get("skillDock").style.display === "none",
+    "the bottom item dock is removed or hidden");
   for (const id of ["shotgun", "submachineGun", "assaultRifle"]) {
     collect(page, id);
-    const sources = imageSources(page.elements.get("skillDock").innerHTML);
-    assert.equal(sources.length, 0, `${id}: no broken image when the Image API is unavailable`);
-    assert.ok(page.elements.get("skillDock").innerHTML.includes(page.debug.state.weapon.name), `${id}: the slot identifies the equipped gun`);
-    assert.ok(page.elements.get("skillDock").innerHTML.includes("<svg"), `${id}: the weapon retains its vector icon`);
-    for (const other of ["assaultRifle", "shotgun", "submachineGun"].filter(other => other !== id))
-      assert.ok(!sources.includes(`assets/items/${other}.png`), `${id}: no stale weapon image`);
-  }
-  for (const skill of page.skills.all.filter(skill => skill.group !== "fixed")) {
-    const fresh = quietPage(); collect(fresh, skill.id);
-    assert.equal(imageSources(fresh.elements.get("skillDock").innerHTML).length, 0, `${skill.id}: no broken dock image`);
-    assert.ok(fresh.elements.get("skillDock").innerHTML.includes(skill.icon), `${skill.id}: acquired item retains its symbol`);
-    assert.ok(fresh.elements.get("pauseSkills").innerHTML.includes(skill.icon), `${skill.id}: pause build retains the same symbol`);
+    assert.equal(page.debug.state.weapon.id, id, `${id}: pickup equips the firearm`);
   }
   assert.ok(page.elements.get("pauseSkills").innerHTML.includes(page.skills.byId("survivalInstinct").icon), "fixed survival instinct remains identifiable in the build list");
 });

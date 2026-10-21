@@ -39,14 +39,14 @@ async function stage(page) {
     window.itemTestEnemy = { ...s.enemies[0] }
     s.godMode = true; s.paused = false; s.density = 0; s.hordeTimer = 999; s.enemies = []
     s.spawnBudget = 0; s.time = 72; s.wave = 4; s.loot = []; s.combatDrops = []
-    p.fireTimer = 999; p.grenadeTimer = 999; p.molotovTimer = 999; p.bearTrapTimer = 999; p.extinguisherTimer = 999
-    for (const id of ["grenade", "molotov", "bearTrap", "extinguisher", "trailBoots", "armorLining"]) {
+    p.fireTimer = 999
+    for (const id of ["grenade", "molotov", "trailBoots", "armorLining"]) {
       const drop = d.spawnLoot(id, "rare", p.x, p.y)
       p.x = drop.x; p.y = drop.y; d.tryCollectLoot(drop.id)
     }
     const weapons = ["assaultRifle", "submachineGun", "shotgun"]
     for (let i = 0; i < weapons.length; i++) d.spawnLoot(weapons[i], "epic", p.x - 115 + i * 110, p.y + 120)
-    for (let i = 0; i < 4; i++) d.spawnLoot(["grenade", "molotov", "bearTrap", "extinguisher"][i], "rare", p.x - 145 + i * 95, p.y + 200)
+    for (let i = 0; i < 2; i++) d.spawnLoot(["grenade", "molotov"][i], "rare", p.x - 95 + i * 95, p.y + 200)
     const types = ["walker", "runner", "brute", "crawler", "bloater"]
     for (let i = 0; i < types.length; i++) {
       const a = -Math.PI + .35 + i * .62
@@ -55,7 +55,10 @@ async function stage(page) {
         hopHeight: 0, burn: 0, hit: 0, dead: false })
     }
     d.step(1 / 60); s.paused = true
-    return { x: p.x, y: p.y, slots: document.querySelectorAll("#skillDock .skill-slot").length }
+    return { x: p.x, y: p.y,
+      grenadeButton: Boolean(document.querySelector("#grenadeButton")),
+      molotovButton: Boolean(document.querySelector("#molotovButton")),
+      dock: Boolean(document.querySelector("#skillDock")) }
   })
 }
 try {
@@ -72,46 +75,41 @@ try {
   assert.equal(await page.locator("#startRun").isDisabled(), false)
   await page.locator("#startRun").click()
   assert.equal(await page.evaluate(() => window.__LAST_NIGHT_DEBUG__.state.phase), "playing")
-  assert.equal(await page.locator("#skillDock img").count(), 0, "loading images use visible fallback icons")
-  assert.equal(await page.locator("#skillDock svg").count(), 1, "the equipped gun has its vector fallback")
+  assert.equal(await page.locator("#skillDock").count(), 0, "the retired bottom item dock is absent")
+  assert.equal(await page.locator("#grenadeButton").count(), 1, "grenade button is visible during loading")
+  assert.equal(await page.locator("#molotovButton").count(), 1, "molotov button is visible during loading")
   unblock()
   await page.waitForFunction(() => window.WASTELAND_ITEM_ART.ready)
-  await page.waitForFunction(() => document.querySelector("#skillDock img")?.naturalWidth > 0)
   assert.equal(await page.evaluate(() => window.WASTELAND_ITEM_ART.ready), true)
   pass("delayed item images do not block play; PNG rendering becomes ready when all images arrive")
   const placement = await stage(page)
-  assert.equal(placement.slots, 7)
-  const icons = await page.locator("#skillDock img").evaluateAll(images => images.map(img => ({ src: img.getAttribute("src"), loaded: img.complete && img.naturalWidth > 0 })))
-  assert.equal(icons.length, 7)
-  assert(icons.every(img => img.loaded))
-  assert(icons.some(img => img.src.endsWith("/bearTrap.png")))
+  assert.equal(placement.grenadeButton, true)
+  assert.equal(placement.molotovButton, true)
+  assert.equal(placement.dock, false)
   await page.screenshot({ path: join(evidence, "game-items.png") })
-  pass("all seven occupied dock slots use loaded item images; scene drops use the same assets")
+  pass("grenade and molotov buttons remain visible after item images load; the bottom dock is absent")
 
-  // The four scenes invoke the actual automatic-use logic, including hand release,
+  // Each button invokes the actual one-shot use path, including hand release,
   // travel, collision, activation and resulting fields. No effect is faked by the test.
-  for (const kind of ["grenade", "molotov", "bearTrap", "extinguisher"]) {
+  for (const kind of ["grenade", "molotov"]) {
     const outcome = await page.evaluate(kind => {
       const d = window.__LAST_NIGHT_DEBUG__, s = d.state, p = s.player
-      s.paused = false; s.throwableProjectiles = []; s.explosions = []; s.fireZones = []; s.extinguisherZones = []; s.slowZones = s.extinguisherZones
+      s.paused = false; s.throwableProjectiles = []; s.explosions = []; s.fireZones = []
       s.traps = []; s.particles = []; s.projectiles = []; s.floaters = []
-      for (const id of ["grenade", "molotov", "bearTrap", "extinguisher"]) p[id + "Timer"] = id === kind ? 0 : 999
       p.fireTimer = 999; p.throwAction = 0
+      s.throwables.grenade = 0; s.throwables.molotov = 0
+      s.throwables[kind] = 1
       const enemy = { ...window.itemTestEnemy, id: 9000, x: p.x + 98, y: p.y - 10, hp: 5000, maxHp: 5000, baseSpeed: 0, speed: 0, burn: 0, burnLevel: 0 }
       s.enemies = [enemy]
-      if (kind === "extinguisher") {
-        s.fireZones.push({ x: p.x + 103, y: p.y - 10, radius: 36, life: 4, tick: 5, level: 1, kind: "molotov" })
-        enemy.burn = 2; enemy.burnLevel = 1
-      }
-      d.step(kind === "extinguisher" ? .14 : .41); s.paused = true
+      const used = d.useThrowable(kind)
+      d.step(.41); s.paused = true
       return { kind, projectileCount: s.throwableProjectiles.length, blast: s.explosions.some(e => e.kind === kind),
-        fire: s.fireZones.length, suppressed: s.fireZones.some(f => f.suppressed?.length), trap: s.traps.some(t => t.triggered), spray: s.extinguisherZones.length,
-        burn: enemy.burn, slow: enemy.trapSlow, hp: enemy.hp, hand: p.throwAction }
+        fire: s.fireZones.length, burn: enemy.burn, hp: enemy.hp, hand: p.throwAction, used, count: s.throwables[kind] }
     }, kind)
+    assert.equal(outcome.used, true)
+    assert.equal(outcome.count, 0)
     if (kind === "grenade") assert(outcome.blast && outcome.hp < 5000)
     if (kind === "molotov") assert(outcome.fire > 0 && outcome.burn > 0)
-    if (kind === "bearTrap") assert(outcome.trap && outcome.slow < .6)
-    if (kind === "extinguisher") assert(outcome.spray > 0 && outcome.suppressed && outcome.burn === 0 && outcome.slow === .6 && outcome.hand > 0)
     await page.screenshot({ path: join(evidence, kind + "-in-game.png") })
     pass("actual " + kind + " action and resulting scene effect", outcome)
   }
@@ -128,9 +126,10 @@ try {
   const dense = await page.evaluate(() => {
     const d = window.__LAST_NIGHT_DEBUG__, s = d.state, p = s.player
     s.paused = false; s.enemies = []; s.loot = []; s.combatDrops = []
-    s.throwableProjectiles = []; s.fireZones = []; s.extinguisherZones = []; s.slowZones = s.extinguisherZones
+    s.throwableProjectiles = []; s.fireZones = []
     s.traps = []; s.explosions = []; s.particles = []; p.throwAction = 0; p.fireTimer = 0
-    for (const id of ["grenade", "molotov", "bearTrap", "extinguisher"]) p[id + "Timer"] = 0
+    s.throwables.grenade = 5; s.throwables.molotov = 5
+    d.useThrowable("grenade"); d.step(.45); d.useThrowable("molotov")
     for (let i = 0; i < 24; i++) {
       const a = i / 24 * Math.PI * 2, r = 105 + (i % 3) * 65
       const x = p.x + Math.cos(a) * r, y = p.y + Math.sin(a) * r
@@ -138,13 +137,13 @@ try {
       s.enemies.push({ ...window.itemTestEnemy, id: 20000 + i, x, y, hp: 5000, maxHp: 5000, baseSpeed: 12, speed: 12, walkCycle: i * .7, burn: 0 })
     }
     d.step(1.6); s.paused = true
-    return { enemies: s.enemies.length, fire: s.fireZones.length, foam: s.extinguisherZones.length, traps: s.traps.length,
+    return { enemies: s.enemies.length, fire: s.fireZones.length, foam: 0, traps: s.traps.length,
       particles: s.particles.length, projectiles: s.projectiles.length, cap: d.config.particleCap }
   })
-  assert(dense.enemies > 8 && dense.fire > 0 && dense.foam > 0 && dense.traps > 0)
+  assert(dense.enemies > 8 && dense.fire > 0)
   assert(dense.particles <= dense.cap && dense.projectiles <= 120)
   await page.screenshot({ path: join(evidence, "dense-effects.png") })
-  pass("four equipped tools coexist in a crowded actual scene within particle and projectile caps", dense)
+  pass("two one-shot throwable effects coexist in a crowded actual scene within particle and projectile caps", dense)
 
   // Show every asset on the scene palette; this is a review sheet, not game UI.
   const sheet = await browser.newPage({ viewport: { width: 1200, height: 1100 } })
@@ -162,17 +161,18 @@ try {
   await ready(phone); await stage(phone)
   await phone.waitForFunction(() => window.WASTELAND_ITEM_ART.ready)
   assert.equal(await phone.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true)
-  assert.equal(await phone.locator("#skillDock img").count(), 7)
-  const dock = await phone.locator("#skillDock").boundingBox()
-  assert(dock.x >= 0 && dock.y >= 0 && dock.x + dock.width <= 844 && dock.y + dock.height <= 390)
+  assert.equal(await phone.locator("#skillDock").count(), 0)
+  for (const id of ["grenadeButton", "molotovButton"]) {
+    const control = await phone.locator("#" + id).boundingBox()
+    assert(control && control.x >= 0 && control.y >= 0 && control.x + control.width <= 844 && control.y + control.height <= 390,
+      `${id} stays inside the touch viewport`)
+  }
   for (const id of ["joystick", "shootButton", "bagButton"]) {
     const control = await phone.locator("#" + id).boundingBox()
-    assert(control && (dock.x + dock.width <= control.x || control.x + control.width <= dock.x
-      || dock.y + dock.height <= control.y || control.y + control.height <= dock.y), `${id} must not cover the skill dock`)
+    assert(control, `${id} remains visible beside the throwable buttons`)
   }
-  assert(await phone.locator("#skillDock img").evaluateAll(images => images.every(image => image.complete && image.naturalWidth > 0)))
   await phone.screenshot({ path: join(evidence, "phone-items.png") })
-  pass("844x390 touch viewport shows seven item images without horizontal overflow")
+  pass("844x390 touch viewport shows two throwable buttons without horizontal overflow")
 
   const retry = await browser.newPage()
   retry.on("pageerror", e => errors.push(e.message))
@@ -185,15 +185,13 @@ try {
   await retry.locator("#startRun").click()
   assert.equal(await retry.evaluate(() => window.__LAST_NIGHT_DEBUG__.state.phase), "playing")
   await stage(retry)
-  assert.equal(await retry.locator("#skillDock img").count(), 0, "failed images cannot leave broken HUD pictures")
-  assert.equal(await retry.locator("#skillDock .skill-slot:not(.empty)").count(), 7)
-  assert.equal(await retry.locator('#skillDock [data-skill-id="grenade"] .skill-icon').textContent(), "雷")
+  assert.equal(await retry.locator("#skillDock").count(), 0, "failed images cannot restore the retired dock")
+  assert.equal(await retry.locator("#grenadeButton").count(), 1)
+  assert.equal(await retry.locator("#molotovButton").count(), 1)
   fail = false
   assert.equal(await retry.evaluate(() => window.WASTELAND_ITEM_ART.load()), true)
   assert.equal(await retry.evaluate(() => window.WASTELAND_ITEM_ART.ready), true)
-  await retry.waitForFunction(() => [...document.querySelectorAll("#skillDock img")].length === 7
-    && [...document.querySelectorAll("#skillDock img")].every(img => img.complete && img.naturalWidth > 0))
-  pass("missing item image leaves the game playable; retry restores item pictures")
+  pass("missing item image leaves the game playable; retry restores visual assets")
 
   const fallback = await browser.newPage({ viewport: { width: 1280, height: 720 } })
   await fallback.route("**/assets/cartoon-*.png", route => route.abort())
@@ -206,7 +204,7 @@ try {
   const crop = await fallback.evaluate(() => {
     const d = window.__LAST_NIGHT_DEBUG__, s = d.state, p = s.player
     s.paused = true; s.enemies = []; s.loot = []; s.combatDrops = []
-    s.projectiles = []; s.throwableProjectiles = []; s.fireZones = []; s.extinguisherZones = []; s.slowZones = s.extinguisherZones
+    s.projectiles = []; s.throwableProjectiles = []; s.fireZones = []
     s.explosions = []; s.traps = []; s.particles = []; s.floaters = []
     Object.assign(p, { throwAction: 0, gait: 0, walkCycle: 0, armAngle: .2, recoil: 0, muzzle: 0 })
     d.step(1 / 60)
@@ -216,7 +214,7 @@ try {
       width: 140 * rect.width / canvas.width, height: 135 * rect.height / canvas.height }
   })
   const idle = await fallback.screenshot({ clip: crop })
-  for (const kind of ["grenade", "molotov", "bearTrap", "extinguisher"]) {
+  for (const kind of ["grenade", "molotov"]) {
     await fallback.evaluate(kind => {
       const d = window.__LAST_NIGHT_DEBUG__
       d.state.player.throwKind = kind; d.state.player.throwAction = .3; d.step(1 / 60)
@@ -224,7 +222,7 @@ try {
     const active = await fallback.screenshot({ clip: crop, path: join(evidence, "fallback-character-" + kind + ".png") })
     assert(!idle.equals(active), `${kind}: the fallback character visibly moves its existing arm without effect fields`)
   }
-  pass("failed character and item pictures retain all four visible tool gestures and the held extinguisher")
+  pass("failed character and item pictures retain grenade and molotov gestures")
   assert.deepEqual(errors, [])
   writeFileSync(join(evidence, "browser-report.json"), JSON.stringify({ results, errors }, null, 2))
 } finally {

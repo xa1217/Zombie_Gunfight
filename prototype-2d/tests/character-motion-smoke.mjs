@@ -379,12 +379,10 @@ for (const [type, motion] of [["hero", "walk"], ["hero", "run"], ["shambler", "w
 console.log("PASS mini adapter paints eight distinct poses with both limbs and ankle-attached footwear in both directions");
 
 let depthPoses = 0;
-for (const throwKind of ["grenade", "molotov", "bearTrap", "extinguisher"]) for (const angle of angles) {
-  const duration = throwKind === "extinguisher" ? .3 : .38;
+for (const throwKind of ["grenade", "molotov"]) for (const angle of angles) {
+  const duration = .38;
   const signatures = [];
-  // The extinguisher holds its fully extended arm before its final .12s
-  // return. Sample that return instead of demanding movement during the hold.
-  for (const fraction of throwKind === "extinguisher" ? [1, .3, .1, 0] : [1, .55, .1, 0]) {
+  for (const fraction of [1, .55, .1, 0]) {
     const actor = { ...baseActor, gait: 0, moveAmount: 0, armAngle: angle, angle,
       throwKind, throwAction: duration * fraction };
     const { context, rig, held, signature } = renderWeb("hero", actor);
@@ -410,7 +408,7 @@ for (const throwKind of ["grenade", "molotov", "bearTrap", "extinguisher"]) for 
   assert.equal(new Set(signatures).size, 4, `web ${throwKind} at ${angle}: release and return paint distinct support-arm poses`);
 }
 assert.ok(depthPoses > 0, "aim and item actions exercise foreshortened arms with real joint depth");
-console.log("PASS web four item actions use the existing support hand, preserve the gun grip and render projected arm depth without leaking the torso clip");
+console.log("PASS web grenade and molotov actions use the existing support hand, preserve the gun grip and render projected arm depth without leaking the torso clip");
 
 const miniHopSignatures = [];
 for (const [phase, clock] of [["windup", .3], ["airborne", .8], ["recovery", 1.2]]) {
