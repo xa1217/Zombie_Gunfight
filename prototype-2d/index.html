@@ -110,38 +110,6 @@
     .scene-copy { margin-top: 3px; font-size: 9px; color: #bdc7b3; }
     .interact-action { position: absolute; z-index: 9; right: 14px; bottom: calc(132px + var(--safe-bottom)); min-height: 44px; max-width: 160px; padding: 9px 12px; border: 1px solid var(--hazard); border-radius: 5px; background: #18241aee; color: var(--bone); font-size: 11px; font-weight: 900; cursor: pointer; }
 
-    .skill-dock {
-      position: absolute;
-      z-index: 6;
-      left: 128px;
-      right: 184px;
-      bottom: calc(12px + var(--safe-bottom));
-      display: flex;
-      gap: 8px;
-      width: auto;
-      pointer-events: none;
-    }
-
-    .skill-group { flex: 1; min-width: 0; }
-    .skill-group.core { flex: 1.5; }
-    .skill-group-label { margin-bottom: 4px; color: #9ca890; font-size: 8px; text-align: center; }
-    .skill-group-slots { display: flex; gap: 3px; padding: 3px; border-radius: 5px; background: #111814cf; }
-    .skill-slot {
-      position: relative;
-      flex: 1;
-      min-width: 0;
-      height: 48px;
-      padding: 2px 0;
-      border-radius: 3px;
-      background: #26322999;
-      text-align: center;
-    }
-
-    .skill-slot.fixed { color: var(--hazard); }
-    .skill-slot.core { color: var(--acid); }
-    .skill-slot.boost { color: var(--cyan); }
-    .skill-slot.empty { color: #7d897c; background: transparent; }
-    .skill-icon { display: grid; place-items: center; height: 34px; font-size: 13px; font-weight: 900; line-height: 17px; }
     .item-icon { display: block; width: 100%; height: 100%; max-height: 34px; object-fit: contain; padding: 2px; filter: drop-shadow(0 1px 1px #17140fcc); }
     .inventory-icon svg { width: 100%; height: 100%; }
     .pause-skill .item-icon { width: 42px; height: 42px; max-height: 42px; float: left; margin-right: 9px; }
@@ -191,6 +159,14 @@
     .fire-action::after { content: "Space"; display: block; margin-top: 2px; color: #ffe9bf99; font-size: 8px; letter-spacing: .08em; }
     .fire-action.is-held, .fire-action:active { background: #de7045ee; transform: scale(.95); }
     .fire-action:focus-visible { outline: 2px solid var(--acid); outline-offset: 3px; }
+    .throwable-button { position: absolute; z-index: 10; bottom: calc(190px + var(--safe-bottom)); display: grid; place-items: center; width: 56px; height: 56px; padding: 4px; border: 2px solid #d8f25acc; border-radius: 50%; background: #17251de8; color: var(--bone); box-shadow: 0 5px 15px #0009, inset 0 0 0 4px #ffffff08; cursor: pointer; touch-action: manipulation; user-select: none; -webkit-user-select: none; }
+    .throwable-button.grenade-button { right: 86px; }
+    .throwable-button.molotov-button { right: 22px; border-color: #ff8b42cc; }
+    .throwable-button:disabled { opacity: .46; filter: grayscale(.7); }
+    .throwable-button.is-holding { border-color: var(--hazard); box-shadow: 0 0 0 4px #f3d28a44, 0 5px 15px #0009; }
+    .throwable-button-icon { display: grid; place-items: center; width: 30px; height: 30px; font-size: 20px; font-weight: 1000; }
+    .throwable-button-icon img { display: block; width: 100%; height: 100%; object-fit: contain; }
+    .throwable-button-count { position: absolute; right: -4px; bottom: -3px; min-width: 20px; padding: 2px 4px; border: 1px solid #111a14; border-radius: 8px; background: var(--hazard); color: #182018; font-size: 11px; line-height: 13px; }
     .bag-button {
       position: absolute;
       z-index: 9;
@@ -511,9 +487,10 @@
       <div class="wave-callout" id="waveCallout">尸潮 01</div>
       <div class="toast" id="toast"></div>
       <div class="touch-zone" id="joystick" aria-label="左侧移动摇杆"><div class="touch-stick" id="stick"></div></div>
+      <button class="throwable-button grenade-button" id="grenadeButton" type="button" aria-label="使用手雷" title="使用手雷"><span class="throwable-button-icon" id="grenadeButtonIcon">雷</span><strong class="throwable-button-count" id="grenadeButtonCount">0</strong></button>
+      <button class="throwable-button molotov-button" id="molotovButton" type="button" aria-label="使用燃烧瓶" title="使用燃烧瓶"><span class="throwable-button-icon" id="molotovButtonIcon">焰</span><strong class="throwable-button-count" id="molotovButtonCount">0</strong></button>
       <button class="bag-button" id="bagButton" type="button" aria-label="打开背包" title="打开背包">🎒</button>
       <button class="fire-action" id="shootButton" type="button" aria-label="按住手动开火">开火</button>
-      <div class="skill-dock" id="skillDock" aria-label="屏幕边缘主武器 1 格与道具 4 格"></div>
       <button class="interact-action" id="interactRun" type="button" hidden>搜索物资 · E</button>
 
       <section class="backpack-window" id="bagPanel" hidden aria-label="物资与背包窗口">
@@ -551,8 +528,8 @@
           </div>
           <button class="primary-action" id="startRun" type="button" disabled>正在加载场景…</button>
           <p class="lead" id="assetLoadStatus" role="status">正在准备手绘场景与角色，请稍候。</p>
-          <p class="hint">开局主武器与求生本能，拾取手雷、燃烧瓶、捕兽夹或灭火器，填入屏幕边缘的 4 格道具栏；重复拾取强化效果。击杀感染者有 0.5% 概率掉落一次性战斗物。</p>
-          <p class="hint">WASD / 方向键移动 · Space 或按住右侧按钮开火 · 靠近门直接走入走出 · E 搜索物资箱 · R 换弹</p>
+          <p class="hint">开局主武器与求生本能，拾取手雷或燃烧瓶后从右侧对应按钮一次性投掷；每种最多携带 5 个。击杀感染者有 0.5% 概率掉落一次性战斗物。</p>
+          <p class="hint">WASD / 方向键移动 · Space 或按住右侧按钮开火 · 点击右侧手雷/燃烧瓶按钮投掷 · 靠近门直接走入走出 · E 搜索物资箱 · R 换弹</p>
         </div>
       </section>
 
@@ -598,6 +575,7 @@
     "use strict"
 
     const Skills = window.WASTELAND_SKILLS
+    const THROWABLE_IDS = Object.freeze(["grenade", "molotov"])
     const Art = window.WASTELAND_ART
     const City = window.WASTELAND_CITY
     const Loot = window.WASTELAND_LOOT
@@ -629,6 +607,7 @@
       lootCap: 24,
       worldLootCap: 48,
       combatDropCap: 10,
+      throwableMax: 5,
       bagCapacity: 40,
       safeCapacity: 9,
       carryWeight: 42.7,
@@ -659,7 +638,7 @@
       "introOverlay", "gameOverOverlay", "pauseOverlay", "pauseRun", "resumeRun", "startRun", "restartRun", "interactRun", "bagButton", "bagPanel", "bagClose", "bagGrid", "bagPanelCount", "searchWindow", "searchClose", "searchTitle", "searchSubtitle", "searchProgress", "searchGrid", "searchTakeAll", "inventorySheet", "bagDetail", "bagUse", "bagDiscard", "bagDragGhost", "weaponValue", "ammoValue", "bagValue", "sceneValue",
       "pauseSkills", "safeGrid", "equipmentGrid", "mainEquipment", "bagSort", "bagScroll", "weightLine", "weightFill", "weightValue", "raidValue", "bagRotate", "bagSplit", "bagTransfer", "lockPanel", "lockReels", "lockConfirm",
       "timeValue", "waveValue", "healthFill", "healthValue", "levelValue", "killValue", "enemyValue", "xpFill",
-      "waveCallout", "toast", "skillDock", "joystick", "stick", "shootButton", "gameOverSummary", "resultTitle", "resultEyebrow",
+      "waveCallout", "toast", "grenadeButton", "grenadeButtonIcon", "grenadeButtonCount", "molotovButton", "molotovButtonIcon", "molotovButtonCount", "joystick", "stick", "shootButton", "gameOverSummary", "resultTitle", "resultEyebrow",
       "adminToggle", "adminPanel", "adminClose", "adminMetrics", "densityRange", "densityValue",
       "adminPause", "adminStep", "adminHorde", "adminLevel", "adminClear", "adminGod", "adminHitbox", "adminCopy", "adminRestart", "eventLog"
     ].map(id => [id, document.getElementById(id)]))
@@ -921,6 +900,10 @@
         traps: [],
         floaters: [],
         weapon: weaponState(),
+        // One-shot throwable supplies are carried separately from permanent
+        // passive skills. Each kind has its own five-item cap.
+        throwables: Object.fromEntries(THROWABLE_IDS.map(itemId => [itemId, 0])),
+        activeThrowableId: null,
         // Raid backpack: searched items are carried until used or the run ends;
         // defeat clears it while successful extraction snapshots it.
         bag: [],
@@ -984,18 +967,11 @@
         : '<span class="item-icon">' + skill.icon + '</span>'
     }
 
-    function renderSkillDock() {
+    function renderPauseSkills() {
       renderedItemArtReady = ItemArt.ready
       const slots = build.slots().map(skill => skill.id === "assaultRifle" && state ? { ...skill, name: state.weapon.name, icon: Loot.weapons[state.weapon.id].icon, quality: state.weapon.quality } : skill)
-      // The edge HUD has one main-weapon slot and four passive item slots.
-      // Survival instinct remains in the build/pause sheet but is not a
-      // second weapon slot.
-      ui.skillDock.innerHTML = [{ group: "fixed", label: "武器", count: 1 }, { group: "core", label: "道具", count: 4 }, { group: "boost", label: "增益", count: 2 }].map(({ group, label, count }) => {
-        const owned = slots.filter(skill => group === "fixed" ? skill.id === "assaultRifle" : skill.group === group)
-        const placeholders = Array.from({ length: count - owned.length }, (_, index) => ({ id: `${group}-empty-${index}`, group, name: `空${label}槽 · 拾取道具球获得`, icon: "＋", level: 0 }))
-        return `<div class="skill-group ${group}"><div class="skill-group-label">${label}${group === "fixed" ? "" : ` ${owned.length}/${count}`}</div><div class="skill-group-slots">${owned.concat(placeholders).map(skill => `<div class="skill-slot ${skill.group} ${skill.level ? "" : "empty"}" data-skill-id="${skill.id}" role="img" aria-label="${skill.name}${skill.level ? ` · Lv.${skill.level} · ${Loot.qualities[skill.quality].name}` : ""}" title="${skill.name}${skill.description ? ` · ${skill.description}` : ""}" style="${skill.level ? `border-bottom:2px solid ${Loot.qualities[skill.quality].color}` : ""}"><span class="skill-icon">${skill.level ? skillIconHtml(skill) : "＋"}</span><span class="skill-level">${skill.level ? group === "fixed" ? skill.id === "assaultRifle" ? Loot.qualities[skill.quality].name : "本能" : `Lv.${skill.level}` : "待拾取"}</span></div>`).join("")}</div></div>`
-      }).join("")
       ui.pauseSkills.innerHTML = slots.map(skill => `<div class="pause-skill">${skillIconHtml(skill)}<strong>${skill.name}</strong><span>${Loot.qualities[skill.quality].name} · Lv.${skill.level}</span><small>${skill.description} ${skill.group === "fixed" ? "" : `当前效果系数 ${skill.effect.toFixed(1)}`}</small></div>`).join("")
+      renderThrowableUi()
     }
 
     function startRun() {
@@ -1024,7 +1000,7 @@
         const residentCount = randomInteger(CONFIG.initialRoomMin, CONFIG.initialRoomMax)
         for (let index = 0; index < residentCount; index += 1) spawnEnemy("walker", { source: "initial-room", room })
       }
-      renderSkillDock()
+      renderPauseSkills()
       showOnlyOverlay(null)
       canvas.focus({ preventScroll: true })
       ui.waveCallout.textContent = "准备探索 · 15秒后首波"
@@ -1458,7 +1434,7 @@
         if (d.category === "weapon") {
           state.weapon = item.weaponState ? { ...item.weaponState } : weaponState(d.weaponId, item.quality || d.quality)
           state.player.reloadTimer = 0; state.player.reloadQueued = false; state.player.fireTimer = 0
-          renderSkillDock()
+          renderPauseSkills()
         } else state.equipment[d.equipmentSlot] = { ...item }
         toast(`已装备 ${d.name}`, 1.5)
       } else if (d.category === "ammo") {
@@ -1661,6 +1637,15 @@
         if (options.kind === "skill" && !Skills.byId(typeOrSkillId)) typeOrSkillId = options.skillId || "skill"
         if (options.kind === "gun" && !Loot.weapons[typeOrSkillId]) typeOrSkillId = options.weaponId || "gun"
       }
+      // Ground skill drops are intentionally limited to the two manually used
+      // throwables. Other skills remain in the build data for compatibility
+      // with existing saves, but they must never appear as pickup balls.
+      const requestedSkill = Skills.byId(typeOrSkillId)
+      // The fixed assault-rifle entry is the player's main-weapon pickup
+      // compatibility path; all non-fixed skills still stay out of ground
+      // loot unless they are one of the two manual throwables.
+      if (requestedSkill && requestedSkill.group !== "fixed" && !THROWABLE_IDS.includes(typeOrSkillId)) return null
+      if (requestedSkill?.group === "fixed" && !Loot.weapons[typeOrSkillId]) return null
       if (state.loot.length >= CONFIG.lootCap || state.loot.length >= CONFIG.worldLootCap) return null
       let item
       if (Loot.weapons[typeOrSkillId]) item = { kind: "gun", itemId: typeOrSkillId }
@@ -1669,10 +1654,12 @@
       else {
         item = Loot.randomItem(build)
         if (typeOrSkillId === "skill" && item.kind === "gun") {
-          const pool = (Skills.throwable || []).filter(skill => build.canUpgrade(skill.id))
-          item = { kind: "skill", itemId: (pool[0] || Skills.throwable?.[0] || Skills.core[0]).id }
+          const pool = (Skills.throwable || []).filter(skill => THROWABLE_IDS.includes(skill.id) && build.canUpgrade(skill.id))
+          const fallback = pool[0] || Skills.throwable?.find(skill => THROWABLE_IDS.includes(skill.id)) || Skills.byId("grenade")
+          item = fallback ? { kind: "skill", itemId: fallback.id } : null
         }
       }
+      if (!item) return null
       const position = findLootPosition(x, y)
       if (!position) return null
       // Explicit quality is a development override; live drops always use the scene's quality table.
@@ -1701,6 +1688,76 @@
       return drop
     }
 
+    function throwableIconHtml(itemId, className = "") {
+      const skill = Skills.byId(itemId)
+      const picture = ItemArt.ready ? ItemArt.iconHtml(itemId, className, skill?.name || itemId) : ""
+      return picture || `<span class="${className}">${skill?.icon || "＋"}</span>`
+    }
+
+    function throwableName(itemId) { return Skills.byId(itemId)?.name || itemId }
+
+    function firstAvailableThrowable(exclude = null) {
+      return THROWABLE_IDS.find(itemId => itemId !== exclude && (state?.throwables?.[itemId] || 0) > 0) || null
+    }
+
+    function renderThrowableUi() {
+      if (!state) return
+      for (const itemId of THROWABLE_IDS) {
+        const button = ui[`${itemId}Button`]
+        const icon = ui[`${itemId}ButtonIcon`]
+        const countNode = ui[`${itemId}ButtonCount`]
+        if (!button || !icon || !countNode) continue
+        const count = state.throwables[itemId] || 0
+        button.disabled = state.phase !== "playing" || state.paused || count <= 0
+        button.title = count > 0 ? `点击使用${throwableName(itemId)} · 剩余${count}个` : `暂无${throwableName(itemId)}`
+        button.setAttribute?.("aria-label", count > 0 ? `使用${throwableName(itemId)}，剩余${count}个` : `暂无${throwableName(itemId)}`)
+        icon.innerHTML = throwableIconHtml(itemId, "throwable-button-icon")
+        countNode.textContent = String(count)
+      }
+    }
+
+    function collectThrowablePickup(ball) {
+      if (!THROWABLE_IDS.includes(ball.itemId)) return false
+      const count = state.throwables[ball.itemId] || 0
+      if (count >= CONFIG.throwableMax) {
+        if (!Number.isFinite(ball.blockedUntil) || state.time >= ball.blockedUntil) {
+          ball.blockedUntil = state.time + 1
+          toast(`${throwableName(ball.itemId)}已达到${CONFIG.throwableMax}个上限`, 1.8)
+        }
+        return false
+      }
+      state.throwables[ball.itemId] = count + 1
+      if (!state.activeThrowableId) state.activeThrowableId = ball.itemId
+      const details = Loot.describe(ball)
+      particle(ball.x, ball.y, details.quality?.color || "#d8f25a", 12, 110)
+      toast(`拾取一次性${throwableName(ball.itemId)} · ${state.throwables[ball.itemId]}/${CONFIG.throwableMax}`, 1.8)
+      logEvent(`携带一次性道具 · ${throwableName(ball.itemId)}`)
+      renderThrowableUi()
+      return true
+    }
+
+    function useThrowable(requestedItemId = null) {
+      if (!state || state.phase !== "playing" || state.paused || gameplayModalOpen()) return false
+      if (requestedItemId !== null && (!THROWABLE_IDS.includes(requestedItemId) || (state.throwables[requestedItemId] || 0) <= 0)) return false
+      const itemId = requestedItemId !== null
+        ? requestedItemId
+        : state.activeThrowableId && (state.throwables[state.activeThrowableId] || 0) > 0
+          ? state.activeThrowableId
+          : firstAvailableThrowable()
+      if (!itemId) { toast("没有可使用的一次性道具", 1.4); return false }
+      const target = nearestEnemy(state.player.x, state.player.y, null, WIDTH * 1.15, true) || {
+        x: state.player.x + Math.cos(state.player.armAngle) * 150,
+        y: state.player.y + Math.sin(state.player.armAngle) * 150
+      }
+      if (!launchThrowable(itemId, 1, target)) return false
+      state.throwables[itemId] = Math.max(0, state.throwables[itemId] - 1)
+      if (!state.throwables[itemId]) state.activeThrowableId = firstAvailableThrowable(itemId)
+      renderThrowableUi()
+      toast(`使用${throwableName(itemId)} · 剩余 ${state.throwables[itemId]} 个`, 1.5)
+      logEvent(`使用一次性道具 · ${throwableName(itemId)}`)
+      return true
+    }
+
     function collectLoot(ball) {
       if (ball.kind === "supply" || ball.supply) {
         const description = Loot.describe(ball)
@@ -1715,6 +1772,12 @@
         toast(`拾取 ${description.name} · 可在背包使用 · 背包 ${bagUsed()}/${state.bagCapacity}`, 2.2)
         logEvent(`携带物资 · ${description.name}`)
         return true
+      }
+      if (ball.kind === "skill") {
+        // Old snapshots may still contain a passive skill ball. Keep it
+        // inert on the ground instead of silently reintroducing the removed
+        // upgrade pickup path.
+        return THROWABLE_IDS.includes(ball.itemId) ? collectThrowablePickup(ball) : false
       }
       const description = Loot.describe(ball)
       let message
@@ -1745,7 +1808,7 @@
       }
       if (state.player.hp > previousHp) state.player.healFlash = 1.2
       particle(ball.x, ball.y, description.quality.color, 12, 110)
-      toast(message, 2.6); logEvent(message); renderSkillDock()
+      toast(message, 2.6); logEvent(message); renderPauseSkills()
       return true
     }
 
@@ -2089,6 +2152,7 @@
     }
     function reloadWeapon() {
       if (!state?.weapon || state.phase !== "playing" || state.paused) return false
+      if (state.player.reloadTimer > 0) return false
       const weapon = Loot.weapons[state.weapon.id] || Loot.weapons.assaultRifle
       const missing = Math.max(0, weapon.magazine - state.weapon.ammoInMag)
       if (!missing || availableAmmo() <= 0) return false
@@ -2103,9 +2167,9 @@
         if (left) Inventory.setQuantity(item, left); else state.bag.splice(state.bag.indexOf(item), 1)
       }
       state.weapon.ammoInMag += loaded
-      state.player.reloadTimer = .35
+      state.player.reloadTimer = Math.max(.1, Number(weapon.reloadTime) || .35)
       state.player.reloadQueued = false
-      toast(`换弹完成 · ${state.weapon.ammoInMag}/${state.weapon.ammoReserve}`, 1.2)
+      toast(`换弹中 · ${weapon.name} ${state.player.reloadTimer.toFixed(1)}秒`, 1.2)
       return true
     }
 
@@ -2624,26 +2688,8 @@
     function updateTactics(dt, stats) {
       updateThrowableProjectiles(dt)
       updateThrowableZones(dt)
-      const target = nearestEnemy(state.player.x, state.player.y, null, WIDTH * 1.15, true)
-      if (target) {
-        const player = state.player
-        if (stats.grenade > 0) {
-          player.grenadeTimer -= dt
-          if (player.grenadeTimer <= 0 && launchThrowable("grenade", stats.grenade, target)) player.grenadeTimer = Math.max(1.7, 4.4 - stats.grenade * .34)
-        }
-        if (stats.molotov > 0) {
-          player.molotovTimer -= dt
-          if (player.molotovTimer <= 0 && launchThrowable("molotov", stats.molotov, target)) player.molotovTimer = Math.max(2.7, 6.6 - stats.molotov * .46)
-        }
-        if (stats.bearTrap > 0) {
-          player.bearTrapTimer -= dt
-          if (player.bearTrapTimer <= 0 && launchThrowable("bearTrap", stats.bearTrap, target)) player.bearTrapTimer = Math.max(2.2, 5.5 - stats.bearTrap * .42)
-        }
-        if (stats.extinguisher > 0) {
-          player.extinguisherTimer -= dt
-          if (player.extinguisherTimer <= 0 && launchThrowable("extinguisher", stats.extinguisher, target)) player.extinguisherTimer = Math.max(2.4, 5.8 - stats.extinguisher * .42)
-        }
-      }
+      // Throwable supplies are one-shot inventory. They only launch from the
+      // explicit right-side use button; this update advances existing effects.
       for (const drone of dronePositions(stats.saw)) for (const enemy of state.enemies) {
         if (!enemy.dead && enemy.sawTimer <= 0 && distanceSquared(drone.x, drone.y, enemy.x, enemy.y) < (enemy.radius + 16) ** 2) {
           hitEnemy(enemy, 9 + stats.saw * 5, "saw")
@@ -3021,7 +3067,7 @@
       context.fillStyle = "#20292b"
       context.fillRect(0, 0, WIDTH, HEIGHT)
       if (!state) return
-      if (renderedItemArtReady !== ItemArt.ready) renderSkillDock()
+      if (renderedItemArtReady !== ItemArt.ready) renderPauseSkills()
       state.camera = cameraFor(state.player)
       context.save()
       context.translate(-state.camera.x, -state.camera.y)
@@ -3101,7 +3147,7 @@
         runId: state.runId, phase: state.phase, result: state.result, ended: state.phase === "victory" || state.phase === "gameover", paused: state.paused, time: state.time, remainingSeconds: Math.max(0, RUN_SECONDS - state.time), wave: state.wave,
         level: state.level, xp: state.xp, nextXp: state.nextXp, kills: state.kills,
         enemies: state.enemies.length, projectiles: state.projectiles.length, pickups: state.pickups.length,
-        loot: state.loot.map(item => ({ ...item })), combatDrops: state.combatDrops.map(item => ({ ...item })), bag: state.bag.map(item => ({ ...item })), bagCapacity: state.bagCapacity, safe: state.safe.map(item => ({ ...item })), equipment: { ...state.equipment }, inventoryWeight: inventoryWeight(), inventoryValue: inventoryValue(), bagPanelOpen: !!state.bagPanelOpen, searchPanel: state.searchPanel ? { boxId: state.searchPanel.id, entries: state.searchPanel.entries.map(entry => ({ ...entry })), elapsed: searchElapsed(state.searchPanel) } : null, extractedLoot: state.extractedLoot.map(item => ({ ...item })), extraction: state.extraction ? { ...state.extraction } : null, scene: state.scene, stage: state.scene, worldVersion: 3, weapon: { ...state.weapon }, modifiers: modifiers(),
+        loot: state.loot.map(item => ({ ...item })), combatDrops: state.combatDrops.map(item => ({ ...item })), bag: state.bag.map(item => ({ ...item })), bagCapacity: state.bagCapacity, safe: state.safe.map(item => ({ ...item })), equipment: { ...state.equipment }, inventoryWeight: inventoryWeight(), inventoryValue: inventoryValue(), bagPanelOpen: !!state.bagPanelOpen, searchPanel: state.searchPanel ? { boxId: state.searchPanel.id, entries: state.searchPanel.entries.map(entry => ({ ...entry })), elapsed: searchElapsed(state.searchPanel) } : null, extractedLoot: state.extractedLoot.map(item => ({ ...item })), extraction: state.extraction ? { ...state.extraction } : null, scene: state.scene, stage: state.scene, worldVersion: 3, weapon: { ...state.weapon }, throwables: { ...state.throwables }, activeThrowableId: state.activeThrowableId, modifiers: modifiers(),
         worldLayer: state.worldLayer,
         activeHouseId: state.activeHouseId,
         houses: [...state.houseRooms.values()].map(room => ({ id: room.houseId, worldBounds: room.worldBounds ? { ...room.worldBounds } : null, roofVisible: state.activeHouseId !== room.houseId, interiorVisible: state.activeHouseId === room.houseId })),
@@ -3134,7 +3180,9 @@
       const quality = Loot.qualities[state.weapon.quality]
       ui.weaponValue.textContent = `${quality.name} · ${state.weapon.name}`
       ui.weaponValue.style.color = quality.color
-      ui.ammoValue.textContent = `弹匣 ${state.weapon.ammoInMag ?? 0} / ${availableAmmo()} · R 换弹`
+      ui.ammoValue.textContent = state.player.reloadTimer > 0
+        ? `换弹中 ${state.player.reloadTimer.toFixed(1)}秒 · ${state.weapon.name}`
+        : `弹匣 ${state.weapon.ammoInMag ?? 0} / ${availableAmmo()} · R 换弹`
       ui.bagValue.textContent = `背包 ${bagUsed()} / ${state.bagCapacity} · ${state.extraction?.reached ? "已到绿色撤离区" : "搜索识别后带入背包"}`
       ui.sceneValue.textContent = state.room ? `${state.room.name || "房屋内部"} · ${state.room.floorLabel || "一楼鸟瞰"} · 靠近物资箱搜索` : "室外街区 · 普通 / 精良掉落"
       const interaction = interactionTarget()
@@ -3143,6 +3191,7 @@
       ui.pauseRun.hidden = state.phase !== "playing" || state.paused
       renderBagPanel()
       renderSearchWindow()
+      renderThrowableUi()
       ui.adminPause.textContent = state.paused ? "继续" : "暂停"
       if (adminMode && !ui.adminPanel.hidden) {
         ui.adminMetrics.textContent = `时间 ${formatTime(state.time)} · ${state.phase}${state.paused ? " / 暂停" : ""}\n感染者 ${state.enemies.length}/${CONFIG.enemyCap} · 峰值 ${state.stats.peakEnemies}\n下波 ${waveSize(state.wave + 1)}只 / ${Math.max(0, Math.ceil(state.hordeTimer))}秒 · FPS ${state.lastFps.toFixed(0)}\n射击 ${state.stats.shots} · 命中 ${state.stats.hits}\n累计伤害 ${Math.round(state.stats.damage)} · 爆炸 ${state.stats.explosions}\n弹丸 ${state.projectiles.length} · 特效 ${state.particles.length}\n玩家 ${state.player.x.toFixed(0)},${state.player.y.toFixed(0)} · ${state.player.movingSpeed.toFixed(0)}px/s`
@@ -3329,8 +3378,10 @@
       setFireState(false, event.pointerId)
       ui.shootButton.releasePointerCapture?.(event.pointerId)
     }
+
     ui.shootButton.addEventListener("pointerdown", beginFirePointer)
     for (const name of ["pointerup", "pointercancel", "lostpointercapture"]) ui.shootButton.addEventListener(name, endFirePointer)
+    for (const itemId of THROWABLE_IDS) ui[`${itemId}Button`].addEventListener("click", () => useThrowable(itemId))
 
     if (adminMode) {
       ui.adminToggle.hidden = false
@@ -3341,7 +3392,7 @@
       ui.adminPause.addEventListener("click", () => togglePause())
       ui.adminStep.addEventListener("click", () => { togglePause(true); update(FIXED_STEP); draw(); syncHud() })
       ui.adminHorde.addEventListener("click", () => { if (state.phase === "playing") { for (let count = 0; count < 20; count += 1) spawnEnemy(); logEvent("管理员从地图边缘生成感染者"); draw(); syncHud() } })
-      ui.adminLevel.addEventListener("click", () => { if (state.phase === "playing") { const ball = spawnLoot(); if (ball) toast("被动投掷物资已落地 · 走近拾取"); draw(); syncHud() } })
+      ui.adminLevel.addEventListener("click", () => { if (state.phase === "playing") { const ball = spawnLoot(); if (ball) toast("一次性投掷物资已落地 · 走近拾取"); draw(); syncHud() } })
       ui.adminClear.addEventListener("click", () => { state.enemies = []; state.projectiles = []; logEvent("管理员清场"); draw(); syncHud() })
       ui.adminGod.addEventListener("click", () => { state.godMode = !state.godMode; ui.adminGod.textContent = `无敌：${state.godMode ? "开" : "关"}` })
       ui.adminHitbox.addEventListener("click", () => { state.showHitboxes = !state.showHitboxes; ui.adminHitbox.textContent = `判定层：${state.showHitboxes ? "开" : "关"}`; draw() })
@@ -3350,7 +3401,7 @@
         catch { toast("浏览器未提供剪贴板权限") }
       })
       window.__LAST_NIGHT_DEBUG__ = Object.freeze({
-        snapshot, spawnLoot, spawnCombatDrop, tryCollectLoot, takeSupply, interact, searchSupplyBox, openSupplyBox, openSearchWindow, closeSearchWindow, takeSearchItem, takeAllSearchItems, toggleBagPanel, reorderBag, transferInventory, organizeBag, rotateBagItem, splitBagItem, confirmLock, unequipItem, availableAmmo, dropBagItem, useBagItem, carrySupply, reloadWeapon, updateExtractionState, takeDamage, enterBuilding, exitBuilding, get state() { return state }, get config() { return { ...CONFIG } }, get build() { return build }, get map() { return city },
+        snapshot, spawnLoot, spawnCombatDrop, tryCollectLoot, takeSupply, interact, searchSupplyBox, openSupplyBox, openSearchWindow, closeSearchWindow, takeSearchItem, takeAllSearchItems, toggleBagPanel, reorderBag, transferInventory, organizeBag, rotateBagItem, splitBagItem, confirmLock, unequipItem, availableAmmo, dropBagItem, useBagItem, carrySupply, reloadWeapon, useThrowable, updateExtractionState, takeDamage, enterBuilding, exitBuilding, get state() { return state }, get config() { return { ...CONFIG } }, get build() { return build }, get map() { return city },
         get loot() { return state.loot }, get combatDrops() { return state.combatDrops }, get bag() { return state.bag }, get supplyItems() { return Loot.supplyItems }, get houses() { return houseSystem }, get modifiers() { return modifiers() },
         get searchPanel() { return state.searchPanel }, get bagPanelOpen() { return !!state.bagPanelOpen },
         get artStatus() { return window.WASTELAND_CHARACTER_ART?.status || "unconfigured" },
@@ -3384,7 +3435,7 @@
 
     if (!browserArt) { ui.startRun.disabled = false; ui.startRun.textContent = "进入街区" }
     state = createState()
-    renderSkillDock()
+    renderPauseSkills()
     syncHud()
     draw()
     requestAnimationFrame(frame)

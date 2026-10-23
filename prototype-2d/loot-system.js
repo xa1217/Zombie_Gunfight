@@ -10,22 +10,30 @@
     relic: { name: "珍藏", color: "#ed786a", multiplier: 2.3, revealDelay: 4.5 }
   })
   const weapons = Object.freeze({
-    assaultRifle: { id: "assaultRifle", name: "突击步枪", icon: "步", damage: 20, interval: .24, speed: 760, pellets: 1, spread: 0, life: 1.4, magazine: 30, reserve: 90, ammoType: "rifle" },
-    submachineGun: { id: "submachineGun", name: "冲锋枪", icon: "冲", damage: 12, interval: .115, speed: 850, pellets: 1, spread: 0, life: .95, magazine: 36, reserve: 108, ammoType: "smg" },
-    shotgun: { id: "shotgun", name: "霰弹枪", icon: "霰", damage: 15, interval: .62, speed: 650, pellets: 5, spread: .13, life: .62, magazine: 8, reserve: 32, ammoType: "shell" },
-    scar: { id: "scar", name: "SCAR", icon: "SC", damage: 24, interval: .25, speed: 790, pellets: 1, spread: 0, life: 1.4, magazine: 30, reserve: 0, ammoType: "rifle" },
-    aug: { id: "aug", name: "AUG", icon: "AU", damage: 20, interval: .19, speed: 810, pellets: 1, spread: 0, life: 1.35, magazine: 30, reserve: 0, ammoType: "rifle" },
-    mp7: { id: "mp7", name: "MP7", icon: "MP", damage: 13, interval: .1, speed: 840, pellets: 1, spread: .02, life: .95, magazine: 40, reserve: 0, ammoType: "smg" },
-    ks23: { id: "ks23", name: "KS23", icon: "KS", damage: 21, interval: .85, speed: 670, pellets: 6, spread: .12, life: .72, magazine: 4, reserve: 0, ammoType: "shell" },
-    policePistol: { id: "policePistol", name: "警用手枪", icon: "枪", damage: 18, interval: .3, speed: 800, pellets: 1, spread: 0, life: 1.05, magazine: 15, reserve: 0, ammoType: "smg" },
-    thunder: { id: "thunder", name: "雷罚", icon: "雷", damage: 22, interval: .15, speed: 880, pellets: 1, spread: 0, life: 1.3, magazine: 55, reserve: 0, ammoType: "rifle" }
+    // Reload balance follows the reference game's weapon-class rhythm:
+    // compact SMGs/pistols are quickest, rifles are medium, and shell-fed
+    // shotguns take longest. The public video does not expose exact frame
+    // timings, so these are explicit playable seconds rather than claimed
+    // source-game measurements.
+    assaultRifle: { id: "assaultRifle", name: "突击步枪", icon: "步", damage: 20, interval: .24, reloadTime: 2.1, speed: 760, pellets: 1, spread: 0, life: 1.4, magazine: 30, reserve: 90, ammoType: "rifle" },
+    submachineGun: { id: "submachineGun", name: "冲锋枪", icon: "冲", damage: 12, interval: .115, reloadTime: 1.6, speed: 850, pellets: 1, spread: 0, life: .95, magazine: 36, reserve: 108, ammoType: "smg" },
+    shotgun: { id: "shotgun", name: "霰弹枪", icon: "霰", damage: 15, interval: .62, reloadTime: 2.6, speed: 650, pellets: 5, spread: .13, life: .62, magazine: 8, reserve: 32, ammoType: "shell" },
+    scar: { id: "scar", name: "SCAR", icon: "SC", damage: 24, interval: .25, reloadTime: 2.2, speed: 790, pellets: 1, spread: 0, life: 1.4, magazine: 30, reserve: 0, ammoType: "rifle" },
+    aug: { id: "aug", name: "AUG", icon: "AU", damage: 20, interval: .19, reloadTime: 2, speed: 810, pellets: 1, spread: 0, life: 1.35, magazine: 30, reserve: 0, ammoType: "rifle" },
+    mp7: { id: "mp7", name: "MP7", icon: "MP", damage: 13, interval: .1, reloadTime: 1.4, speed: 840, pellets: 1, spread: .02, life: .95, magazine: 40, reserve: 0, ammoType: "smg" },
+    ks23: { id: "ks23", name: "KS23", icon: "KS", damage: 21, interval: .85, reloadTime: 2.9, speed: 670, pellets: 6, spread: .12, life: .72, magazine: 4, reserve: 0, ammoType: "shell" },
+    policePistol: { id: "policePistol", name: "警用手枪", icon: "枪", damage: 18, interval: .3, reloadTime: 1.3, speed: 800, pellets: 1, spread: 0, life: 1.05, magazine: 15, reserve: 0, ammoType: "smg" },
+    thunder: { id: "thunder", name: "雷罚", icon: "雷", damage: 22, interval: .15, reloadTime: 2.4, speed: 880, pellets: 1, spread: 0, life: 1.3, magazine: 55, reserve: 0, ammoType: "rifle" }
   })
   const combatConsumables = Object.freeze({
     invulnerableBurst: { id: "invulnerableBurst", name: "2秒无敌", icon: "盾", color: "#d8f25a", effect: "invulnerable", duration: 2 },
     fireRateOverdrive: { id: "fireRateOverdrive", name: "5秒攻速翻倍", icon: "速", color: "#ffbd63", effect: "fireRate", duration: 5, multiplier: 2 },
     ammoOvercharge: { id: "ammoOvercharge", name: "5秒弹药效果 +2", icon: "弹", color: "#74bfff", effect: "ammo", duration: 5, levels: 2 }
   })
-  const throwableSkills = Object.freeze(["grenade", "molotov", "bearTrap", "extinguisher"])
+  // Only the two manually used throwables are lootable. Other tactical skills
+  // remain defined by the skill system for backwards-compatible effect code,
+  // but they never enter a ground drop or combat loot roll.
+  const throwableSkills = Object.freeze(["grenade", "molotov"])
   const ranks = Object.keys(qualities)
 
   // Reference: BV1UtKv6aEWd, timestamped observations in REFERENCE-APIPI.md.
@@ -107,15 +115,17 @@
   }
 
   function randomItem(build, random = Math.random) {
-    // Timed upgrade balls still draw from the four throwable passives. Search
+    // Timed upgrade balls draw only from the two manually used throwables. Search
     // boxes use randomSupplyLoot instead and never call this helper.
     const Skills = window.WASTELAND_SKILLS
     const throwable = (Skills.throwable || []).filter(skill => throwableSkills.includes(skill.id))
     const owned = build.selectedSkills().filter(skill => throwableSkills.includes(skill.id) && build.level(skill.id) < skill.max)
     const available = throwable.filter(skill => build.canUpgrade(skill.id))
     const pool = owned.length && random() < .55 ? owned : available.length ? available : owned.length ? owned : throwable
-    const skill = pool[Math.floor(random() * pool.length)] || throwable[0] || Skills.core[0]
-    return { kind: "skill", itemId: skill.id }
+    // Keep the fallback inside the same two-item contract even if a caller
+    // supplies an unusual build or the configured throwable list is empty.
+    const skill = pool[Math.floor(random() * pool.length)] || throwable[0] || Skills.byId("grenade")
+    return { kind: "skill", itemId: skill?.id || "grenade" }
   }
 
   function randomCombatConsumable(random = Math.random) {
