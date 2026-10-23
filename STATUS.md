@@ -1,7 +1,15 @@
 # 《尸潮：最后一夜》项目状态
 
 **LAST NIGHT SURVIVOR**  
-更新时间：2026-10-14（Asia/Shanghai）
+更新时间：2026-10-15（Asia/Shanghai）
+
+## 2026-10-23 集成记录（xa1217/Zombie_Gunfight）
+
+- 按《尸潮：最后一夜》计划书接棒：最新功能基线 `work/codex/reload-speed-20261014@41da623`（源在 honru09/JiangShi_Gun_Game）已集成到本仓库 main 线：按枪换弹（9 把枪各有 reloadTime）、手雷/燃烧瓶右侧双独立按钮（各上限 5、手动一次性消耗、满库存保留地面物）、底部旧道具栏移除、捕兽夹/灭火器不再掉落。
+- 集成方式：cherry-pick 3cbbbce / a2e4b2b / 41da623 到 335274f 之上；冲突仅出现在测试文件，已按 41da623 线版本解决。335274f 自带的另一套测试变体与新行为不兼容（combat 变体期望 scatterModule 地面掉落、throwable 变体期望 throwableProjectiles 字段），实测不通过，未采用。
+- 本轮实测：scripts/validate.mjs PASS；combat / loot / throwable-inventory / item-integration / spawn-schedule / landscape-controls / character-motion / door-combat / item-effects / character-anatomy / verify-loot --unit-only 均 PASS；换弹专项因无头画布桩逐步记录绘制调用会撑爆沙盒内存（纯 41da623 同样复现，非集成问题），已改为逐枪独立进程复跑，9 把枪的换弹时长/弹匣/锁定/解锁全部 PASS。
+- 未在本环境执行：item-visual-smoke、house-art-smoke（需 playwright，沙盒未装，改由真实浏览器公网验收覆盖）；city-map-smoke 全量在沙盒内存上限中断（--unit-only 首项 PASS），与旧基线表现一致。
+- 公网：GitHub Pages（main / 根目录）自动发布本集成版本，地址 https://xa1217.github.io/Zombie_Gunfight/prototype-2d/index.html 。
 
 ## 当前交付
 
@@ -20,13 +28,29 @@
 | 城市 | 1440×2560 世界、1280×720 横屏视口、六栋放大房屋、六地块、1纵2横道路；贴图按建筑类别对应 |
 | 房屋 | 六种暖色室内布局，商店、住宅及高楼一层等；前后双门连续进出，同一世界与相机，当前房屋揭顶；家具、搜索点与状态持久化 |
 | 寻路 | 房屋走廊与门洞加宽，室内外感染者可持续追击；家具和墙体阻挡移动与弹道 |
-| 构筑 | 1格主武器、4格被动道具、2格增益；求生本能保留在构筑/暂停表；经验升生存等级，道具球获取/升级技能；Space/右侧按钮手动开火 |
-| 自动道具 | 手雷、燃烧瓶、捕兽夹、灭火器自动释放；掌心投掷动作、爆炸/燃烧/夹击/泡沫特效；灭火器扇形场持续5秒、减速40%，局部灭火 |
-| 掉落 | 场景道具按室内外品质生成，物资箱沿用当前搜打撤物资与枪械表，完整原作数据仍待核验；击杀只有经验与0.5%概率的一次性临时增益 |
+| 构筑 | 1格主武器、右侧手雷/燃烧瓶双按钮、2格增益；求生本能保留在构筑/暂停表；Space/右侧按钮手动开火 |
+| 自动道具 | 手雷、燃烧瓶改为右侧独立按钮手动一次性投掷；每种最多5个，保留爆炸/燃烧特效；捕兽夹、灭火器不再掉落或触发 |
+| 掉落 | 场景技能掉落严格只生成手雷和燃烧瓶，满5个时保留地面掉落；物资箱沿用当前搜打撤物资与枪械表；击杀只有经验与0.5%概率的一次性临时增益 |
 | 搜打撤 | 背包默认 5 列×8 行（40 格）；真实占格、空格移动及交换校验；箱内全部未知物资格与总/剩余数量首开即显示，按品质逐项识别；进度持久化，显式领取/使用、拖出丢弃；完整原作规则尚未对齐 |
 | 角色 | 命名两帧walk/run/crawl及跳跃阶段；左右瞄准肩掌连接、双臂层级、爬行者双臂双腿完整；重型腾空免接触伤害 |
 | 僵尸生成 | 开局室外随机3–6只，每屋2–5只；15秒首波，此后每20秒从地图边缘可通行空地/街道涌入；波次人数4只起、每波+2、默认最多22只 |
 | 数量上限 | 网页桌面160、触屏104；房内外共享全局上限，室内人数不阻止地图边缘增援；微信标准104、省电72 |
+
+## 2026-10-15 双投掷道具按钮与掉落收敛
+
+任务：将场景可拾取的一次性道具收敛为手雷、燃烧瓶，并在右侧提供两个独立使用按钮。
+
+- 删除底部旧道具栏和长按选择面板；右侧分别显示手雷、燃烧瓶按钮及当前数量。
+- 每种道具最多携带 5 个；达到上限时不消耗地面掉落，并将上限提示按秒节流，避免提示闪烁。
+- 点击按钮只消耗对应种类并触发手动投掷、爆炸或燃烧效果；打开背包/搜索窗口、暂停、死亡和结算时按钮不穿透使用。
+- 随机地面技能球和显式掉落入口过滤所有非手雷/燃烧瓶技能；保留主武器枪械兼容拾取路径。捕兽夹、灭火器不再生成或自动释放。
+- 僵尸击杀掉落仍独立使用 0.5% 临时增益表，不会混入手雷/燃烧瓶库存。
+
+改动文件：`prototype-2d/index.html`、`prototype-2d/loot-system.js`、`prototype-2d/README.md`、`scripts/verify-loot.mjs`、`prototype-2d/tests/` 下投掷物、战斗、物资和视觉回归脚本。
+
+实际验收：`node scripts/validate.mjs`、`node prototype-2d/tests/throwable-inventory-smoke.mjs`、`node prototype-2d/tests/item-integration.mjs`、`node prototype-2d/tests/combat-smoke.mjs`、`node prototype-2d/tests/loot-smoke.mjs --unit-only`、`node scripts/verify-loot.mjs --unit-only`、`node prototype-2d/tests/spawn-schedule-smoke.mjs`、`node prototype-2d/tests/landscape-controls-smoke.mjs`、`node prototype-2d/tests/character-motion-smoke.mjs`、`node prototype-2d/tests/city-map-smoke.mjs --unit-only`、`NODE_OPTIONS=--max-old-space-size=8192 node prototype-2d/tests/reload-speed-smoke.mjs`、`git diff --check` 均通过。Edge 视觉验收 `item-visual-smoke.mjs` 通过：两个按钮在视口内、素材加载后可点击、数量各自扣减、无旧底部栏。
+
+限制：未执行微信真机、真实触屏设备和真人五分钟试玩；公网发布需在本轮提交后创建新的本地服务与 Tunnelmole 地址，保留既有测试地址不覆盖。
 
 ## 2026-10-14 延迟波次与开局居民
 
