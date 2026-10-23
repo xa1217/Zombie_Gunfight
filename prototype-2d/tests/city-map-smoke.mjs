@@ -445,6 +445,7 @@ async function browserChecks() {
         debug.step(1 / 60);
         const camera = debug.snapshot().camera;
         const hud = document.querySelector(".hud").getBoundingClientRect();
+        const fire = document.getElementById("shootButton").getBoundingClientRect();
         const canvas = document.getElementById("gameCanvas").getBoundingClientRect();
         const scale = canvas.height / 720;
         const playerScreenY = canvas.y + (debug.state.player.y - camera.y) * scale;
@@ -456,11 +457,11 @@ async function browserChecks() {
         return { hud: { x: hud.x, y: hud.y, width: hud.width, height: hud.height }, camera,
           head: playerScreenY - 42 * scale, feet: playerScreenY + 40 * scale,
           left: playerScreenX - 32 * scale, right: playerScreenX + 32 * scale,
-          hudBottom: hud.y + hud.height, canvasBottom: canvas.y + canvas.height, controls };
+          hudBottom: hud.y + hud.height, fireTop: fire.y, controls };
       }, corner);
       assert.deepEqual(moved.hud, initial.hud, "HUD remains fixed while the world camera moves");
       assert(moved.head >= moved.hudBottom - .1, "the entire head remains below the top HUD at world corners");
-      assert(moved.feet <= moved.canvasBottom + .1, "the entire sprite remains inside the game canvas at world corners");
+      assert(moved.feet <= moved.fireTop + .1, "the entire sprite remains above the right-side controls at world corners");
       for (const control of moved.controls) {
         assert(moved.right <= control.left || moved.left >= control.right || moved.feet <= control.top || moved.head >= control.bottom,
           `the corner sprite overlaps ${control.id}`);

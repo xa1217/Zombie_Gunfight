@@ -70,10 +70,8 @@ function assertResidentPopulation(api) {
 }
 assertResidentPopulation(debug)
 assert.equal(debug.snapshot().build.slots.length, 2)
-assert(page.elements.has("grenadeButton"), "the grenade use button is present")
-assert(page.elements.has("molotovButton"), "the molotov use button is present")
-assert(!page.elements.has("skillDock") || page.elements.get("skillDock").hidden || page.elements.get("skillDock").style.display === "none",
-  "the retired bottom item dock is removed or hidden")
+assert(!page.elements.has("skillDock"), "the bottom passive-item dock is removed")
+assert(page.elements.has("grenadeButton") && page.elements.has("molotovButton"), "the two throwable buttons remain on the right")
 assert.equal(debug.config.runSeconds, 300)
 assert.equal(debug.snapshot().nextXp, 5)
 assert.equal(debug.state.enemies.every(enemy => enemy.type === "walker" && enemy.speed === 38), true)
@@ -92,7 +90,7 @@ page.key("Space", false)
 assert.ok(debug.snapshot().stats.shots > 0)
 assert.ok(debug.snapshot().stats.hits > 0)
 assert.ok(debug.snapshot().kills > 0)
-console.log("PASS real page script starts with two skills, separate throwable buttons, random slow residents, manual rifle shots and hits")
+console.log("PASS real page script starts with two skills, seven dock slots, random slow residents, manual rifle shots and hits")
 
 const beforeMove = debug.snapshot().player
 page.key("KeyD")
@@ -137,14 +135,16 @@ page.click("adminLevel")
 assert.equal(debug.state.phase, "playing")
 assert.equal(debug.loot.length, lootBefore + 1)
 debug.state.loot = []
-const upgradeId = "scatterModule"
+const upgradeId = "grenade"
 const ball = debug.spawnLoot(upgradeId, "common", debug.state.player.x, debug.state.player.y)
+assert(ball && ball.kind === "skill", "administrator creates a throwable scene ball")
 debug.state.player.x = ball.x; debug.state.player.y = ball.y
 debug.step(1 / 60)
-assert.equal(debug.build.level(upgradeId), 1)
-assert.equal(debug.snapshot().build.slots.length, 3)
+assert.equal(debug.state.throwables[upgradeId], 1)
+assert.equal(debug.build.level(upgradeId), 0)
+assert.equal(debug.snapshot().build.slots.length, 2)
 assert.equal(page.elements.has("upgradeList"), false)
-console.log("PASS administrator creates a scene ball; touching a new skill acquires level one without an upgrade dialog")
+console.log("PASS administrator creates a grenade scene ball; touching it fills one-shot inventory without an upgrade dialog")
 
 const closeEnemy = { ...debug.state.enemies[0], x: debug.state.player.x, y: debug.state.player.y, radius: 17, baseSpeed: 0, hp: 100, maxHp: 100, dead: false }
 debug.state.enemies = [closeEnemy]

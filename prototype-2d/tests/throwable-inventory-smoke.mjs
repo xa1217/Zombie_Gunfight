@@ -15,8 +15,13 @@ function quietPage() {
   const debug = page.debug;
   const state = debug.state;
   Object.assign(state, {
-    godMode: true, density: 0, lootTimer: Infinity, hordeTimer: Infinity,
-    spawnBudget: 0, loot: [], combatDrops: []
+    godMode: true,
+    density: 0,
+    lootTimer: Infinity,
+    hordeTimer: Infinity,
+    spawnBudget: 0,
+    loot: [],
+    combatDrops: []
   });
   state.player.fireTimer = Infinity;
   const template = state.enemies[0];
@@ -33,6 +38,7 @@ function pickup(page, itemId) {
   debug.state.player.x = drop.x;
   debug.state.player.y = drop.y;
   debug.step(1 / 60);
+  assert(!debug.loot.some(item => item.id === drop.id), `${itemId} pickup is removed after collection`);
   return drop;
 }
 
@@ -43,38 +49,54 @@ assert.equal(debug.config.throwableMax, 5, "throwable inventory limit is five pe
 assert.deepEqual(Object.keys(state.throwables).sort(), [...THROWABLES].sort(),
   "the inventory contains only grenade and molotov");
 assert.equal(state.activeThrowableId, null, "no throwable is selected before the first pickup");
-for (const id of ["grenadeButton", "molotovButton", "grenadeButtonCount", "molotovButtonCount"]) {
-  assert(elements.has(id), `${id} is present in the right-side throwable controls`);
-}
-assert(!elements.has("throwablePicker"), "the obsolete multi-item picker is removed");
+assert(elements.has("grenadeButton"), "the grenade use button exists");
+assert(elements.has("molotovButton"), "the molotov use button exists");
+assert(!elements.has("throwableButton"), "the legacy single throwable button is gone");
+assert(!elements.has("throwablePicker"), "the legacy long-press picker is gone");
+assert(!elements.has("skillDock"), "the bottom skill dock is gone");
 
 for (const [index, itemId] of THROWABLES.entries()) {
   pickup(page, itemId);
   assert.equal(state.throwables[itemId], 1, `${itemId} pickup increments its count`);
-  if (index === 0) assert.equal(state.activeThrowableId, itemId, "first pickup is the default selection");
+  if (index === 0) assert.equal(state.activeThrowableId, itemId, "the first pickup becomes the default");
 }
+assert.deepEqual({ ...state.throwables }, { grenade: 1, molotov: 1 }, "the two counts stay independent");
 
-for (let count = 1; count < 5; count += 1) pickup(page, "grenade");
+for (let count = 0; count < 4; count += 1) pickup(page, "grenade");
 assert.equal(state.throwables.grenade, 5);
 const rejected = debug.spawnLoot("grenade");
-assert.ok(rejected, "a full grenade inventory still leaves a scene pickup");
-state.player.x = rejected.x; state.player.y = rejected.y;
+assert.ok(rejected, "a full inventory still leaves a scene pickup");
+state.player.x = rejected.x;
+state.player.y = rejected.y;
 debug.step(1 / 60);
-assert.equal(state.throwables.grenade, 5, "the sixth grenade is rejected at the cap");
-assert(debug.loot.some(item => item.id === rejected.id), "a full inventory does not consume the pickup");
+assert.equal(state.throwables.grenade, 5, "the fifth grenade is the hard inventory cap");
+assert(debug.loot.some(item => item.id === rejected.id), "a sixth grenade stays on the ground");
+for (const id of ["bearTrap", "extinguisher", "scatterModule", "trailBoots", "survivalInstinct"]) {
+  assert.equal(debug.spawnLoot(id), null, `${id} is not a supported ground drop`);
+}
+
 state.loot = [];
+state.throwables = { grenade: 1, molotov: 1 };
+state.activeThrowableId = null;
+state.player.throwAction = 0;
+assert.equal(debug.useThrowable("grenade"), true, "the grenade use path launches manually");
+assert.equal(state.throwables.grenade, 0, "grenade use consumes one charge");
+assert.equal(state.player.throwKind, "grenade");
+debug.step(.5);
+assert.equal(debug.useThrowable("molotov"), true, "the molotov use path launches manually");
+assert.equal(state.throwables.molotov, 0, "molotov use consumes one charge");
+assert.equal(state.player.throwKind, "molotov");
+debug.step(.5);
+assert.equal(debug.useThrowable("grenade"), false, "an empty grenade button cannot use another type");
+assert.equal(debug.useThrowable("bearTrap"), false, "legacy throwable IDs cannot be used");
 
 state.throwables = { grenade: 1, molotov: 1 };
-state.activeThrowableId = "grenade";
-assert.equal(debug.useThrowable("grenade"), true, "grenade button use launches a grenade");
-assert.equal(state.throwables.grenade, 0, "grenade use consumes one charge");
+state.activeThrowableId = null;
+state.player.throwAction = 0;
+page.click("grenadeButton");
+assert.equal(state.throwables.grenade, 0, "clicking grenade button uses grenade only");
 debug.step(.5);
-assert.equal(debug.useThrowable("molotov"), true, "molotov button use launches a molotov");
-assert.equal(state.throwables.molotov, 0, "molotov use consumes one charge");
-debug.step(.5);
-assert.equal(debug.useThrowable("grenade"), false, "an empty grenade button cannot use");
-assert.equal(debug.useThrowable("molotov"), false, "an empty molotov button cannot use");
-assert.equal(state.throwableProjectiles.some(projectile => projectile.kind === "grenade" || projectile.kind === "molotov"), true,
-  "button use reaches the real throwable launch path");
+page.click("molotovButton");
+assert.equal(state.throwables.molotov, 0, "clicking molotov button uses molotov only");
 
-console.log("PASS grenade/molotov-only throwable buttons, five-item cap, rejected full pickup and one-shot use");
+console.log("PASS two throwable counts, five-item cap, rejected legacy drops, manual button use and one-shot consumption");

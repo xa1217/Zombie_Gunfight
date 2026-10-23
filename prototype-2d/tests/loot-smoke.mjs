@@ -69,6 +69,11 @@ export function bootPage(coarse = false, admin = true) {
 
 const plain = value => JSON.parse(JSON.stringify(value));
 const THROWABLE_IDS = new Set(["grenade", "molotov"]);
+const PASSIVE_SKILL_IDS = new Set([
+  "scatterModule", "incendiaryMagazine", "arcGenerator", "sawDrone", "proximityMine", "armorPiercingBolt",
+  "trailBoots", "armorLining", "magnetHarness", "fieldBandage", "rationPack", "adrenalineAmpule"
+]);
+const WEAPON_IDS = new Set(["assaultRifle", "submachineGun", "shotgun", "scar", "aug", "mp7", "ks23", "policePistol", "thunder"]);
 const DOOR_VECTORS = {
   south: { outward: { x: 0, y: 1 }, inward: { x: 0, y: -1 }, enter: "KeyW", leave: "KeyS" },
   north: { outward: { x: 0, y: -1 }, inward: { x: 0, y: 1 }, enter: "KeyS", leave: "KeyW" },
@@ -76,6 +81,18 @@ const DOOR_VECTORS = {
   west: { outward: { x: -1, y: 0 }, inward: { x: 1, y: 0 }, enter: "KeyD", leave: "KeyA" }
 };
 function collect(debug, id, quality = "common") {
+  // Non-throwable skill balls are no longer live drops. Exercise the build
+  // contract directly here while keeping ground-pickup assertions for guns
+  // and the two one-shot throwables that players can actually find.
+  if (PASSIVE_SKILL_IDS.has(id)) {
+    const result = debug.build.collect(id, quality);
+    if (!result.accepted) {
+      const multiplier = { common: 1, fine: 1.2, rare: 1.5, epic: 1.9 }[quality] || 1;
+      debug.state.player.hp = Math.min(debug.state.player.maxHp, debug.state.player.hp + 16 * multiplier);
+    }
+    return { id: `synthetic-${id}`, kind: "skill", itemId: id, quality };
+  }
+  assert(THROWABLE_IDS.has(id) || WEAPON_IDS.has(id), `unsupported live pickup fixture ${id}`);
   const ball = debug.spawnLoot(id, quality, debug.state.player.x, debug.state.player.y);
   assert(ball, `cannot create ${id} ball`);
   debug.state.player.x = ball.x; debug.state.player.y = ball.y;
@@ -248,7 +265,7 @@ export function runLootChecks() {
   const houseDebug = housePage.debug; houseDebug.state.godMode = true;
   const house = houseDebug.houses.houses[0];
   assert(house);
-  const outdoorBall = houseDebug.spawnLoot("scatterModule", "common", houseDebug.map.spawn.x, houseDebug.map.spawn.y);
+  const outdoorBall = houseDebug.spawnLoot("grenade", "common", houseDebug.map.spawn.x, houseDebug.map.spawn.y);
   const outdoorEnemyIds = houseDebug.state.enemies.map(enemy => enemy.id);
   const crossed = walkDoor(housePage, house, "enter");
   const room = crossed.room;
@@ -382,7 +399,7 @@ export function runLootChecks() {
   assert.equal(deathDebug.state.extractedLoot.length, 0, "death does not preserve extracted loot");
   assert.equal(deathDebug.interact(), false, "death blocks searching a nearby unopened cache");
   assert.equal(deathDebug.searchSupplyBox(deathCache), false, "death blocks opening another supply box");
-  assert.equal(deathDebug.spawnLoot("scatterModule"), null, "death blocks new drops");
+  assert.equal(deathDebug.spawnLoot("grenade"), null, "death blocks new drops");
   const deadSnapshot = immutableSimulation(deathDebug);
   deathDebug.step(1);
   assert.equal(immutableSimulation(deathDebug), deadSnapshot, "death freezes room loot and search state");
@@ -561,7 +578,7 @@ export function runLootChecks() {
   for (let count = 0; count < 12; count += 1) {
     boxDebug.state.loot = [];
     const ball = boxDebug.spawnLoot("random", "common", boxDebug.state.player.x + 90, boxDebug.state.player.y);
-    assert(ball && ball.kind === "skill" && THROWABLE_IDS.has(ball.itemId), "random scene drops only contain grenade or molotov");
+    assert(ball && ball.kind === "skill" && THROWABLE_IDS.has(ball.itemId), "random item boxes only contain supported throwable passives");
   }
   const boxHouse = boxDebug.houses.houses[0]; enter(boxPage, boxHouse);
   const boxContainer = boxDebug.state.room.containers[0];
@@ -572,20 +589,32 @@ export function runLootChecks() {
   assert(boxSupplies.some(item => item.itemId !== "junk"), "boxes use the video catalog");
   assert(boxSupplies.every(item => boxDebug.supplyItems[item.itemId]), "house searches only generate carryable supply items");
 
+  const throwablePage = bootPage(); throwablePage.start();
+  const throwableDebug = throwablePage.debug;
+  throwableDebug.state.godMode = true; throwableDebug.state.density = 0;
+  throwableDebug.state.lootTimer = Infinity; throwableDebug.state.hordeTimer = Infinity; throwableDebug.state.spawnBudget = 0;
+  assert.deepEqual(Object.keys(throwableDebug.state.throwables).sort(), [...THROWABLE_IDS].sort(), "only grenade and molotov are carried as drops");
   for (const throwableId of THROWABLE_IDS) {
-    const pickupPage = bootPage(); pickupPage.start();
-    const pickupDebug = pickupPage.debug; pickupDebug.state.godMode = true; pickupDebug.state.density = 0;
-    const picked = collect(pickupDebug, throwableId);
-    assert.equal(pickupDebug.state.throwables[throwableId], 1, `${throwableId} enters the one-shot inventory`);
-    assert.equal(pickupDebug.build.level(throwableId), 0, `${throwableId} does not enter the permanent passive build`);
-    assert(!pickupDebug.build.selectedCore.includes(throwableId), `${throwableId} does not occupy a passive slot`);
-    assert.equal(pickupDebug.state.player.throwAction, 0, `${throwableId} pickup does not auto-release`);
-    assert(picked.itemId === throwableId);
-    assert.equal(pickupDebug.useThrowable(throwableId), true, `${throwableId} can be used from its button`);
-    assert.equal(pickupDebug.state.throwables[throwableId], 0, `${throwableId} use consumes its charge`);
+    const picked = collect(throwableDebug, throwableId);
+    assert.equal(throwableDebug.state.throwables[throwableId], 1, `${throwableId} enters one-shot inventory`);
+    assert.equal(throwableDebug.build.level(throwableId), 0, `${throwableId} does not enter the permanent build`);
+    assert.equal(picked.itemId, throwableId);
+  }
+  const throwableTarget = { ...throwableDebug.state.enemies[0], id: 990001, x: throwableDebug.state.player.x + 72, y: throwableDebug.state.player.y,
+    hp: 1000, maxHp: 1000, speed: 0, baseSpeed: 0, contactTimer: Infinity, dead: false };
+  throwableDebug.state.enemies = [throwableTarget]; throwableDebug.state.player.throwAction = 0;
+  assert.equal(throwableDebug.useThrowable("grenade"), true, "grenade is manually launched from its button");
+  assert.equal(throwableDebug.state.throwables.grenade, 0);
+  throwableDebug.step(.5);
+  assert.equal(throwableDebug.useThrowable("molotov"), true, "molotov is manually launched from its button");
+  assert.equal(throwableDebug.state.throwables.molotov, 0);
+  throwableDebug.step(.6);
+  assert(throwableDebug.state.explosions.length + throwableDebug.state.fireZones.length > 0, "manual throwables create visible effects");
+  for (const id of ["bearTrap", "extinguisher", "scatterModule", "trailBoots", "survivalInstinct"]) {
+    assert.equal(throwableDebug.spawnLoot(id), null, `${id} does not spawn as a ground drop`);
   }
   console.log("PASS rare combat consumables apply temporary effects once; large categorized rooms expose furniture and collision");
-  console.log("PASS timed drops contain supported temporary buffs; house boxes contain supplies; grenade/molotov pickups are manual one-shot items");
+  console.log("PASS timed drops contain only grenade/molotov; house boxes contain supplies; throwables are manual one-shot inventory");
   return { simulated: true, inventoryRegression: true };
 }
 
