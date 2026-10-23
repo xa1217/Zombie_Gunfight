@@ -90,28 +90,27 @@ async function browserChecks() {
       await page.goto(url); await page.locator("#startRun").click();
       await page.evaluate(() => { const d = window.__LAST_NIGHT_DEBUG__; d.state.godMode = true; d.state.paused = false; });
       assert.equal(await page.locator("[data-upgrade-id], #levelOverlay, #upgradeList").count(), 0);
-      assert.equal(await page.locator(".skill-group.fixed .skill-slot").count(), 1, "edge HUD reserves one main-weapon slot");
-      assert.equal(await page.locator('.skill-group.fixed .skill-slot[data-skill-id="assaultRifle"]').count(), 1, "main weapon is visible in the fixed slot");
-      assert.equal(await page.locator(".skill-group.core .skill-slot").count(), 4, "edge HUD exposes four throwable item slots");
-      assert.equal(await page.locator(".skill-group.boost .skill-slot").count(), 2, "edge HUD exposes two temporary boost slots");
+      assert.equal(await page.locator("#skillDock").count(), 0, "the legacy bottom skill dock is absent");
+      assert.equal(await page.locator("#grenadeButton").count(), 1, "the grenade button is present");
+      assert.equal(await page.locator("#molotovButton").count(), 1, "the molotov button is present");
       assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
       const contact = await page.evaluate(() => {
         const d = window.__LAST_NIGHT_DEBUG__, s = d.state;
         const x = s.player.x, y = s.player.y;
-        const ball = d.spawnLoot("scatterModule", "common", x + 90, y);
-        const before = d.build.level("scatterModule"); d.step(1 / 60);
-        const distant = d.build.level("scatterModule");
+        const ball = d.spawnLoot("grenade", "common", x + 90, y);
+        const before = s.throwables.grenade; d.step(1 / 60);
+        const distant = s.throwables.grenade;
         s.player.x = ball.x; s.player.y = ball.y; d.step(1 / 60);
-        const first = d.build.level("scatterModule"), pellets = d.modifiers.pellets;
-        d.spawnLoot("scatterModule", "common", s.player.x, s.player.y); d.step(1 / 60);
-        return { before, distant, first, second: d.build.level("scatterModule"),
-          pellets, upgradedPellets: d.modifiers.pellets, phase: s.phase, coreSlots: d.build.selectedCore.length };
+        const first = s.throwables.grenade;
+        const secondBall = d.spawnLoot("grenade", "common", s.player.x, s.player.y); d.step(1 / 60);
+        return { before, distant, first, second: s.throwables.grenade,
+          secondBall: Boolean(secondBall), phase: s.phase, active: s.activeThrowableId };
       });
       assert.equal(contact.before, 0); assert.equal(contact.distant, 0, "a distant ball is not magnet collected");
-      assert.equal(contact.first, 1); assert.equal(contact.second, 2); assert.equal(contact.coreSlots, 1);
-      assert(contact.upgradedPellets > contact.pellets); assert.equal(contact.phase, "playing");
+      assert.equal(contact.first, 1); assert.equal(contact.second, 2); assert(contact.secondBall);
+      assert.equal(contact.active, "grenade"); assert.equal(contact.phase, "playing");
       await page.screenshot({ path: join(evidence, `${prefix}-item-levels.png`) });
-      pass(`${prefix} browser touch collection and duplicate effect`, { viewport, ...contact });
+      pass(`${prefix} browser touch collection and duplicate throwable count`, { viewport, ...contact });
 
       await page.evaluate(() => {
         const d = window.__LAST_NIGHT_DEBUG__;
