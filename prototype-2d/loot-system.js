@@ -62,7 +62,8 @@
     compass: { name: "指南针", icon: "针", art: "compass", category: "valuable", quality: "rare", value: 5256, weight: .12 },
     windowHammer: { name: "破窗锤", icon: "锤", art: "hammer", category: "material", quality: "rare", value: 5520, weight: .35 },
     sunglasses: { name: "墨镜", icon: "镜", art: "glasses", category: "valuable", quality: "rare", value: 4464, weight: .08 },
-    massageGun: { name: "筋膜枪", icon: "筋", art: "dryer", category: "valuable", quality: "rare", value: 8628, weight: .5 },
+    massageGun: { name: "筋膜枪", icon: "筋", art: "massage", category: "valuable", quality: "rare", value: 8628, weight: .5 },
+    matches: { name: "火柴", icon: "柴", art: "matches", category: "valuable", quality: "common", value: 260, weight: .02 },
     wig: { name: "假发套", icon: "发", art: "wig", category: "valuable", quality: "rare", value: 3400, weight: .2 },
     medkit: { name: "户外医疗包", icon: "医", art: "medkit", category: "medical", heal: 60, stackMax: 3, quality: "legendary", weight: .65, value: 12000 },
     hemostatic: { name: "止血针", icon: "针", art: "syringe", category: "medical", heal: 38, stackMax: 3, quality: "epic", weight: .08, value: 36000 },
@@ -89,7 +90,7 @@
   const containerTypes = Object.freeze({
     travel: { name: "旅行箱", columns: 5, rows: 2, min: 2, max: 4, pool: ["basketball", "cards", "cup", "milk", "hairdryer", "lens", "wine", "pizza"] },
     equipment: { name: "装备箱", columns: 5, rows: 2, min: 3, max: 5, pool: ["lightAmmo", "smgAmmo", "shells", "scar", "aug", "mp7", "ks23", "policePistol", "trainingHelmet", "samuraiVest", "fieldRig", "assaultBoots", "fieldPack"] },
-    tool: { name: "工具柜", columns: 5, rows: 4, min: 3, max: 5, pool: ["compass", "windowHammer", "massageGun", "lighter", "vacuum", "medkit", "hemostatic", "sunglasses", "wig"] },
+    tool: { name: "工具柜", columns: 5, rows: 4, min: 3, max: 5, pool: ["compass", "windowHammer", "massageGun", "lighter", "vacuum", "medkit", "hemostatic", "sunglasses", "wig", "matches"] },
     safe: { name: "加密大保险", columns: 5, rows: 4, min: 3, max: 5, locked: true, pool: ["actionCamera", "necklace", "wine", "chessClock", "chess", "speaker", "sunflower", "vacuum", "thunder", "tacticalPack", "cup", "lighter"] }
   })
   const supplyPool = Object.freeze(Object.keys(supplyItems).filter(id => !["assaultRifle", "submachineGun", "shotgun"].includes(id)).map(id => [id, 1 / (Object.keys(supplyItems).length - 3)]))

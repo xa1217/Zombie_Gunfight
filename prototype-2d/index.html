@@ -375,6 +375,17 @@
     .text-action { border: 0; padding: 7px; color: #aeb8a6; background: transparent; font-size: 10px; font-weight: 800; cursor: pointer; }
     .hint { margin: 11px 0 0; color: #7f8b7c; font-size: 9px; line-height: 1.5; text-align: center; }
 
+    .stash-sheet { margin-top: 16px; padding: 12px; border-top: 1px solid #5d685e; background: #11181388; text-align: left; }
+    .stash-sheet h3 { margin: 0 0 8px; color: var(--bone); font-size: 13px; }
+    .stash-total { margin: 8px 0 0; color: #d7c884; font-size: 11px; font-weight: 900; }
+    .stash-row { display: grid; grid-template-columns: 30px 1fr auto; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px solid #435047; font-size: 11px; }
+    .stash-row .stash-icon { width: 30px; height: 30px; }
+    .stash-row .stash-icon svg { width: 100%; height: 100%; }
+    .stash-row small { display: block; color: #8e9a88; font-size: 9px; }
+    .stash-row button { min-height: 26px; padding: 4px 8px; border: 1px solid #657466; background: #17231b; color: var(--bone); font-size: 10px; cursor: pointer; }
+    .stash-row button.is-pending { border-color: var(--acid); color: var(--acid); }
+    .result-loot { margin-top: 14px; padding: 10px; border-top: 1px solid #5d685e; background: #11181388; font-size: 11px; line-height: 1.7; text-align: left; }
+    .result-loot b { color: #d7c884; }
     .upgrade-card {
       position: relative;
       display: grid;
@@ -527,6 +538,7 @@
             <div class="brief-item"><strong>拾取升级</strong><span>同类道具 · 等级叠加</span></div>
           </div>
           <button class="primary-action" id="startRun" type="button" disabled>正在加载场景…</button>
+          <section class="stash-sheet" aria-label="局外仓库"><h3>局外仓库</h3><div id="stashList"></div><p class="stash-total" id="stashTotal"></p><p class="hint">撤离带回的物资、倒下后安全箱保留的物资都会存入仓库；开始前点「带入」可在下局开局装进道具包（受背包格数与负重限制）。</p></section>
           <p class="lead" id="assetLoadStatus" role="status">正在准备手绘场景与角色，请稍候。</p>
           <p class="hint">开局主武器与求生本能，拾取手雷或燃烧瓶后从右侧对应按钮一次性投掷；每种最多携带 5 个。击杀感染者有 0.5% 概率掉落一次性战斗物。</p>
           <p class="hint">WASD / 方向键移动 · Space 或按住右侧按钮开火 · 点击右侧手雷/燃烧瓶按钮投掷 · 靠近门直接走入走出 · E 搜索物资箱 · R 换弹</p>
@@ -534,7 +546,7 @@
       </section>
 
       <section class="overlay" id="gameOverOverlay" hidden>
-        <div class="sheet"><p class="eyebrow" id="resultEyebrow">RUN ENDED</p><h2 id="resultTitle">撤离前倒下</h2><p class="lead" id="gameOverSummary">坚持 00:00，击倒 0 名感染者。</p><button class="primary-action" id="restartRun" type="button">再守一夜</button></div>
+        <div class="sheet"><p class="eyebrow" id="resultEyebrow">RUN ENDED</p><h2 id="resultTitle">撤离前倒下</h2><p class="lead" id="gameOverSummary">坚持 00:00，击倒 0 名感染者。</p><div class="result-loot" id="resultLoot"></div><section class="stash-sheet" aria-label="仓库带入"><h3>仓库 · 下局带入</h3><div id="resultStashList"></div><p class="hint">点「带入」标记的物资会在点「再守一夜」后装进新一局道具包。</p></section><button class="primary-action" id="restartRun" type="button">再守一夜</button></div>
       </section>
 
       <button class="pause-toggle" id="pauseRun" type="button" hidden aria-label="暂停游戏">暂停 Ⅱ</button>
@@ -640,6 +652,7 @@
       "timeValue", "waveValue", "healthFill", "healthValue", "levelValue", "killValue", "enemyValue", "xpFill",
       "waveCallout", "toast", "grenadeButton", "grenadeButtonIcon", "grenadeButtonCount", "molotovButton", "molotovButtonIcon", "molotovButtonCount", "joystick", "stick", "shootButton", "gameOverSummary", "resultTitle", "resultEyebrow",
       "adminToggle", "adminPanel", "adminClose", "adminMetrics", "densityRange", "densityValue",
+      "stashList", "stashTotal", "resultLoot", "resultStashList",
       "adminPause", "adminStep", "adminHorde", "adminLevel", "adminClear", "adminGod", "adminHitbox", "adminCopy", "adminRestart", "eventLog"
     ].map(id => [id, document.getElementById(id)]))
 
@@ -974,6 +987,128 @@
       renderThrowableUi()
     }
 
+    // Cross-run stash (Apipi-style warehouse): extracted loot survives between
+    // runs in localStorage; in the headless test harness it falls back to an
+    // in-memory store for the current page. Victory deposits bag + safe;
+    // defeat deposits only the safe box, matching the in-run rule.
+    const STASH_KEY = "last-night-stash-v1"
+    const STASH_CAPACITY = 60
+    let stashFallback = null
+    const pendingBring = new Set()
+    function stashStorage() {
+      try { return typeof localStorage !== "undefined" ? localStorage : null } catch { return null }
+    }
+    function loadStash() {
+      const storage = stashStorage()
+      if (storage) {
+        try {
+          const parsed = JSON.parse(storage.getItem(STASH_KEY) || "[]")
+          if (Array.isArray(parsed)) return parsed.filter(entry => entry && Loot.supplyItems[entry.itemId])
+        } catch { return [] }
+      }
+      return stashFallback ? stashFallback.map(entry => ({ ...entry })) : []
+    }
+    function saveStash(items) {
+      const storage = stashStorage()
+      if (storage) { try { storage.setItem(STASH_KEY, JSON.stringify(items)) } catch {} }
+      else stashFallback = items.map(entry => ({ ...entry }))
+    }
+    function stashEntryId() { return `stash-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}` }
+    function serializeStashItem(item) {
+      const entry = { ...item, id: stashEntryId() }
+      delete entry.slot
+      return entry
+    }
+    function depositToStash(items) {
+      const stash = loadStash()
+      let added = 0
+      for (const item of items || []) {
+        if (!item || !Loot.supplyItems[item.itemId]) continue
+        const incoming = serializeStashItem(item)
+        const existing = stash.find(entry => Inventory.compatible(entry, incoming))
+        if (existing) {
+          const room = Inventory.stackMax(existing) - Inventory.quantity(existing)
+          const moved = Math.min(Inventory.quantity(incoming), room)
+          if (moved > 0) { Inventory.setQuantity(existing, Inventory.quantity(existing) + moved); added += 1 }
+          if (moved >= Inventory.quantity(incoming)) continue
+          Inventory.setQuantity(incoming, Inventory.quantity(incoming) - moved)
+        }
+        if (stash.length >= STASH_CAPACITY) continue
+        stash.push(incoming); added += 1
+      }
+      saveStash(stash)
+      renderStash()
+      return added
+    }
+    function discardStash(entryId) {
+      saveStash(loadStash().filter(entry => entry.id !== entryId))
+      pendingBring.delete(entryId)
+      renderStash()
+    }
+    function togglePendingBring(entryId) {
+      if (pendingBring.has(entryId)) pendingBring.delete(entryId)
+      else pendingBring.add(entryId)
+      renderStash()
+    }
+    function bringFromStash(entryId) {
+      // In-run use (tests / debug): move one stash entry into the live bag.
+      if (!state || state.phase !== "playing") { togglePendingBring(entryId); return false }
+      const stash = loadStash()
+      const entry = stash.find(item => item.id === entryId)
+      if (!entry) return false
+      const inserted = Inventory.insert(state.bag, { ...entry }, BAG_COLUMNS, state.bagCapacity)
+      if (!inserted) return false
+      state.bag = inserted
+      saveStash(stash.filter(item => item.id !== entryId))
+      pendingBring.delete(entryId)
+      renderStash()
+      return true
+    }
+    function applyPendingBring() {
+      if (!state) return
+      let left = 0
+      for (const entryId of [...pendingBring]) {
+        if (!bringFromStash(entryId)) left += 1
+      }
+      pendingBring.clear()
+      if (left) toast(`${left} 件仓库物资未带入：背包已满或超重`, 2.4)
+    }
+    function renderStash() {
+      const stash = loadStash()
+      const total = stash.reduce((sum, entry) => sum + Inventory.value(entry), 0)
+      const rows = stash.length ? stash.map(entry => {
+        const data = Loot.supplyItems[entry.itemId]
+        const pending = pendingBring.has(entry.id)
+        return `<div class="stash-row"><span class="stash-icon inventory-icon">${inventoryArt(data)}</span><span><b>${data.name}</b><small>${qualityLabel(entry.quality || data.quality)} · ${Inventory.quantity(entry)} 件 · 价值 ${money(Inventory.value(entry))}</small></span><span><button type="button" data-stash-bring="${entry.id}" class="${pending ? "is-pending" : ""}">${pending ? "已选带入" : "带入"}</button> <button type="button" data-stash-discard="${entry.id}">丢弃</button></span></div>`
+      }).join("") : "<p class=\"hint\">仓库是空的 · 撤离带回或安全箱保留的物资会自动存入。</p>"
+      for (const node of [ui.stashList, ui.resultStashList]) {
+        if (!node) continue
+        node.innerHTML = rows
+        if (node.querySelectorAll) {
+          node.querySelectorAll("[data-stash-bring]").forEach(button => button.addEventListener("click", () => togglePendingBring(button.dataset.stashBring)))
+          node.querySelectorAll("[data-stash-discard]").forEach(button => button.addEventListener("click", () => discardStash(button.dataset.stashDiscard)))
+        }
+      }
+      if (ui.stashTotal) ui.stashTotal.textContent = `仓库 ${stash.length} / ${STASH_CAPACITY} 件 · 总价值 ${money(total)}`
+    }
+    function renderResultLoot(items, deposited) {
+      if (!ui.resultLoot) return
+      const grouped = new Map()
+      for (const item of items || []) {
+        const data = Loot.supplyItems[item.itemId]
+        if (!data) continue
+        const key = `${item.itemId}|${item.quality || data.quality}`
+        const entry = grouped.get(key) || { name: data.name, quality: item.quality || data.quality, count: 0, value: 0 }
+        entry.count += Inventory.quantity(item)
+        entry.value += Inventory.value(item)
+        grouped.set(key, entry)
+      }
+      const total = [...grouped.values()].reduce((sum, entry) => sum + entry.value, 0)
+      ui.resultLoot.innerHTML = grouped.size
+        ? `<b>带回物资（${items.length} 件 · 总价值 ${money(total)}）</b><br>` + [...grouped.values()].map(entry => `${entry.name} · ${qualityLabel(entry.quality)} ×${entry.count} · ${money(entry.value)}`).join("<br>") + `<br><small>已存入仓库 ${deposited} 件 · 下局开始前可在仓库点「带入」。</small>`
+        : "<b>本局没有带回物资。</b>"
+    }
+
     function startRun() {
       syncVisualAssets()
       if (!visualAssets.ready) {
@@ -1001,6 +1136,7 @@
         for (let index = 0; index < residentCount; index += 1) spawnEnemy("walker", { source: "initial-room", room })
       }
       renderPauseSkills()
+      applyPendingBring()
       showOnlyOverlay(null)
       canvas.focus({ preventScroll: true })
       ui.waveCallout.textContent = "准备探索 · 15秒后首波"
@@ -2274,6 +2410,7 @@
         state.result = "defeat"
         state.bag = []
         state.extractedLoot = state.safe.map(item => ({ ...item }))
+        renderResultLoot(state.extractedLoot, depositToStash(state.extractedLoot))
         if (state.extraction) state.extraction.reached = false
         releaseInput()
         closeSearchWindow()
@@ -2773,6 +2910,7 @@
         state.result = "victory"
         state.paused = false
         state.extractedLoot = [...state.bag, ...state.safe].map(item => ({ ...item }))
+        renderResultLoot(state.extractedLoot, depositToStash(state.extractedLoot))
         releaseInput()
         closeSearchWindow()
         state.bagPanelOpen = false
@@ -3401,7 +3539,7 @@
         catch { toast("浏览器未提供剪贴板权限") }
       })
       window.__LAST_NIGHT_DEBUG__ = Object.freeze({
-        snapshot, spawnLoot, spawnCombatDrop, tryCollectLoot, takeSupply, interact, searchSupplyBox, openSupplyBox, openSearchWindow, closeSearchWindow, takeSearchItem, takeAllSearchItems, toggleBagPanel, reorderBag, transferInventory, organizeBag, rotateBagItem, splitBagItem, confirmLock, unequipItem, availableAmmo, dropBagItem, useBagItem, carrySupply, reloadWeapon, useThrowable, updateExtractionState, takeDamage, enterBuilding, exitBuilding, get state() { return state }, get config() { return { ...CONFIG } }, get build() { return build }, get map() { return city },
+        snapshot, spawnLoot, spawnCombatDrop, tryCollectLoot, takeSupply, interact, searchSupplyBox, openSupplyBox, openSearchWindow, closeSearchWindow, takeSearchItem, takeAllSearchItems, toggleBagPanel, reorderBag, transferInventory, organizeBag, rotateBagItem, splitBagItem, confirmLock, unequipItem, availableAmmo, dropBagItem, useBagItem, carrySupply, reloadWeapon, useThrowable, updateExtractionState, takeDamage, enterBuilding, exitBuilding, stashList: loadStash, depositToStash, bringFromStash, discardStash, togglePendingBring, get pendingBring() { return [...pendingBring] }, get state() { return state }, get config() { return { ...CONFIG } }, get build() { return build }, get map() { return city },
         get loot() { return state.loot }, get combatDrops() { return state.combatDrops }, get bag() { return state.bag }, get supplyItems() { return Loot.supplyItems }, get houses() { return houseSystem }, get modifiers() { return modifiers() },
         get searchPanel() { return state.searchPanel }, get bagPanelOpen() { return !!state.bagPanelOpen },
         get artStatus() { return window.WASTELAND_CHARACTER_ART?.status || "unconfigured" },
@@ -3435,6 +3573,7 @@
 
     if (!browserArt) { ui.startRun.disabled = false; ui.startRun.textContent = "进入街区" }
     state = createState()
+    renderStash()
     renderPauseSkills()
     syncHud()
     draw()

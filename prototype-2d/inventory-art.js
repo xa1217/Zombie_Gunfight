@@ -32,6 +32,8 @@
     boots: '<path d="M20 7H44L43 32 55 44 54 56H12L9 45 19 35Z" fill="#ac7e4d"/><path d="M23 13L37 16M22 22L37 25M21 30L37 33M11 52H54" fill="none" stroke="#393d35" stroke-width="4"/>',
     backpack: '<path d="M24 9V3H42V9" fill="none" stroke="#c3c1a4" stroke-width="4"/><rect x="9" y="9" width="46" height="50" rx="11" fill="#8e9b81"/><rect x="19" y="33" width="28" height="22" rx="4" fill="#5d6c59"/><path d="M21 10V28M42 10V28M11 26H53" fill="none" stroke="#c0c3a6" stroke-width="4"/>',
     milk: '<path d="M18 15L25 4H40L48 15 47 59H17Z" fill="#e1dec6"/><path d="M18 25H47V44H18Z" fill="#92ada4"/><path d="M18 15H48M25 4V15" fill="none"/>',
+    matches: '<path d="M14 20L50 14 53 46 17 52Z" fill="#a85a3f"/><path d="M14 28L52 22 53 32 15 38Z" fill="#e0c98a"/><path d="M20 20L24 8 28 9 25 20M31 18L34 6 38 7 35 18M42 16L45 5 49 6 46 16" fill="#e8d9a0"/><circle cx="25" cy="7" r="3" fill="#6b4a2f"/><circle cx="35" cy="5" r="3" fill="#6b4a2f"/><circle cx="46" cy="4" r="3" fill="#6b4a2f"/>',
+    massage: '<path d="M10 14Q8 30 22 33L44 30 48 16 30 8Z" fill="#8a7f6a"/><path d="M44 16Q58 14 57 27Q56 36 44 33" fill="#b67949"/><path d="M22 33L19 55 29 57 34 32" fill="#5d6c59"/><path d="M14 20Q20 24 28 21" fill="none" stroke="#e0c98a" stroke-width="2"/>',
     pizza: '<path d="M7 12Q34 3 57 14L29 58Z" fill="#dbb675"/><path d="M7 12Q34 3 57 14L51 23Q31 14 12 23Z" fill="#a97847"/><circle cx="26" cy="29" r="5" fill="#aa5141"/><circle cx="39" cy="24" r="4" fill="#aa5141"/><circle cx="28" cy="43" r="4" fill="#aa5141"/>',
     box: '<path d="M7 15L39 8 57 18 26 27Z" fill="#bca673"/><path d="M7 15L26 27 26 59 7 46Z" fill="#80674f"/><path d="M26 27L57 18 57 49 26 59Z" fill="#a28a60"/>'
   }
