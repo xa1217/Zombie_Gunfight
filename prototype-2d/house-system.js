@@ -774,6 +774,8 @@
       const { minX, minY, maxX, maxY } = room.bounds
       const frame = room.worldBounds || { minX: minX - 34, minY: minY - 34, width: maxX - minX + 68, height: maxY - minY + 68 }
       const fx = frame.minX ?? frame.x, fy = frame.minY ?? frame.y
+      // The floor plan sits as a raised block on the street, not a flat decal.
+      ctx.fillStyle = "rgba(24,20,12,0.30)"; ctx.fillRect(fx + 12, fy + 16, frame.width, frame.height)
       ctx.save(); ctx.beginPath(); ctx.rect(fx, fy, frame.width, frame.height); ctx.clip()
       ctx.fillStyle = "#bdad83"; ctx.fillRect(fx, fy, frame.width, frame.height)
       let cache = interiorCache.get(room)

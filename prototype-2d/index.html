@@ -466,7 +466,13 @@
     .event-log { margin-top: 9px; padding-top: 8px; border-top: 1px solid #39453c; color: #7f9083; font: 8px/1.55 Consolas, monospace; }
 
     @media (pointer: coarse), (max-width: 720px) { .touch-zone, .fire-action { display: grid; } }
-    @media (orientation: portrait) and (pointer: coarse) { .orientation-hint { display: grid; } }
+    /* Auto-landscape: on a portrait phone the whole shell is rotated 90deg so
+    the game is always landscape on screen, even when the device or its webview
+    refuses to rotate. Width is capped so the rotated picture fits the viewport
+    in both dimensions while keeping 16:9. .force-portrait reproduces the same
+    layout on desktop for testing (?forcePortrait=1). */
+    @media (orientation: portrait) and (pointer: coarse) { .orientation-hint { display: none; } .game-shell { width: min(100dvh, calc(100dvw * 1.7778)); transform: rotate(90deg); } }
+    .force-portrait .game-shell { width: min(100dvh, calc(100dvw * 1.7778)); transform: rotate(90deg); }
     @media (orientation: landscape) { .orientation-hint { display: none; } }
     @media (pointer: fine) and (min-width: 721px) { .touch-zone, .fire-action { opacity: .68; } }
     @media (max-height: 650px) { .sheet { padding-block: 18px 15px; } .brief { margin: 12px 0; } .lead { margin-top: 11px; } .upgrade-card { min-height: 80px; padding: 9px; } }
@@ -657,6 +663,7 @@
     ].map(id => [id, document.getElementById(id)]))
 
     const query = new URLSearchParams(location.search)
+    if (query.get("forcePortrait") === "1") { try { document.body?.classList.add("force-portrait") } catch {} }
     const adminMode = query.get("admin") === "1"
     const testerId = query.get("tester") || "local"
     const keys = new Set()
@@ -1109,7 +1116,34 @@
         : "<b>本局没有带回物资。</b>"
     }
 
+    // Shell rotation state: CSS rotates the shell on portrait phones, but
+    // pointer math that reads getBoundingClientRect() sees the visual (rotated)
+    // box, so joystick/grid vectors must be mapped back to shell-local space.
+    // rotate(90deg) clockwise maps local (x, y) to visual (-y, x), so the
+    // inverse is local = (visualY, -visualX). Geometry (innerWidth <
+    // innerHeight) matches the CSS portrait query in real browsers and stays
+    // false in the headless harness, which has no viewport size.
+    function shellRotated() {
+      try {
+        if (typeof document !== "undefined" && document.body?.classList?.contains("force-portrait")) return true
+        return !!coarsePointer && typeof window !== "undefined" && Number.isFinite(window.innerWidth) && Number.isFinite(window.innerHeight) && window.innerWidth < window.innerHeight
+      } catch { return false }
+    }
+    function rotateInputVector(x, y, rotated = shellRotated()) { return rotated ? { x: y, y: -x } : { x, y } }
+    function requestLandscapeLock() {
+      // Best-effort native lock (Android Chrome needs fullscreen first); it
+      // silently no-ops on iOS and in the harness, where the CSS rotation
+      // above already covers portrait. Never throws into game startup.
+      try {
+        if (!coarsePointer || typeof window === "undefined" || window.innerWidth >= window.innerHeight) return
+        const docEl = typeof document !== "undefined" ? document.documentElement : null
+        if (docEl?.requestFullscreen && !document.fullscreenElement) { const result = docEl.requestFullscreen(); if (result?.catch) result.catch(() => {}) }
+        if (typeof screen !== "undefined" && screen.orientation?.lock) { const result = screen.orientation.lock("landscape"); if (result?.catch) result.catch(() => {}) }
+      } catch {}
+    }
+
     function startRun() {
+      requestLandscapeLock()
       syncVisualAssets()
       if (!visualAssets.ready) {
         if (visualAssets.status === "error") location.reload()
@@ -1605,6 +1639,12 @@
       const grid = inventoryGrid(area), rect = grid.node.getBoundingClientRect()
       const clip = grid.node.parentElement?.getBoundingClientRect?.() || rect
       if (x < rect.left || x >= rect.right || y < Math.max(rect.top, clip.top) || y >= Math.min(rect.bottom, clip.bottom)) return null
+      if (shellRotated()) {
+        // Visual rect is transposed: width = local height, height = local width.
+        const rows = Math.ceil(grid.capacity / grid.columns)
+        const localX = y - rect.top, localY = rect.width - (x - rect.left)
+        return { area, column: Math.floor(localX / (rect.height / grid.columns)), row: Math.min(rows - 1, Math.floor(localY / (rect.width / rows))) }
+      }
       const rowHeight = rect.height / Math.ceil(grid.capacity / grid.columns)
       return { area, column: Math.floor((x - rect.left) / (rect.width / grid.columns)), row: Math.floor((y - rect.top) / rowHeight) }
     }
@@ -1625,7 +1665,12 @@
       if (!item || area === "search" && searchElapsed() < item.revealAt) return
       event.preventDefault()
       const rect = card.getBoundingClientRect(), size = Inventory.size(item)
-      state.bagDrag = { itemId: item.id, area, capture: grid.node, pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, offsetX: Math.min(size.width - 1, Math.max(0, Math.floor((event.clientX - rect.left) / (rect.width / size.width)))), offsetY: Math.min(size.height - 1, Math.max(0, Math.floor((event.clientY - rect.top) / (rect.height / size.height)))), moved: false }
+      const grabLocal = shellRotated()
+        ? { x: event.clientY - rect.top, y: rect.width - (event.clientX - rect.left) }
+        : { x: event.clientX - rect.left, y: event.clientY - rect.top }
+      const grabWidth = shellRotated() ? rect.height : rect.width
+      const grabHeight = shellRotated() ? rect.width : rect.height
+      state.bagDrag = { itemId: item.id, area, capture: grid.node, pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, offsetX: Math.min(size.width - 1, Math.max(0, Math.floor(grabLocal.x / (grabWidth / size.width)))), offsetY: Math.min(size.height - 1, Math.max(0, Math.floor(grabLocal.y / (grabHeight / size.height)))), moved: false }
       grid.node.setPointerCapture?.(event.pointerId)
     }
     function bagPointerMove(event) {
@@ -2221,9 +2266,14 @@
       // One fixed birdseye camera serves both street and floor plans. The
       // active room only replaces the roof pixels at its footprint; it never
       // recenters or zooms the player into a separate room view.
+      // Alien-Shooter-style aim lookahead: while playing, the camera leans a
+      // little toward where the player is aiming so threats ahead stay visible.
       const top = -CONFIG.cameraTopGutter
       const bottom = WORLD_HEIGHT - HEIGHT + CONFIG.cameraBottomGutter
-      return { x: clamp(player.x - WIDTH / 2, 0, WORLD_WIDTH - WIDTH), y: clamp(player.y - HEIGHT * .54, top, bottom), scale: 1 }
+      const lookahead = state?.phase === "playing" && Number.isFinite(player.aim) ? 56 : 0
+      const aimX = lookahead ? Math.cos(player.aim) * lookahead : 0
+      const aimY = lookahead ? Math.sin(player.aim) * lookahead : 0
+      return { x: clamp(player.x + aimX - WIDTH / 2, 0, WORLD_WIDTH - WIDTH), y: clamp(player.y + aimY - HEIGHT * .54, top, bottom), scale: 1 }
     }
 
     function segmentRectFraction(ax, ay, bx, by, rect, padding = 0) {
@@ -2977,6 +3027,9 @@
     }
 
     function drawEnemy(enemy) {
+      // Southeast cast shadow under the atlas figure, same light as the blocks.
+      context.save(); context.fillStyle = "rgba(24,20,12,0.35)"
+      context.beginPath(); context.ellipse(enemy.x + 6, enemy.y + 10, enemy.radius, enemy.radius * .35, 0, 0, Math.PI * 2); context.fill(); context.restore()
       if (window.WASTELAND_CHARACTER_ART?.drawEnemy(context, enemy, { playerX: state.player.x, statusEffects: false })) return
       if (enemy.motion === "crawl") { drawCrawlerFallback(enemy); return }
       context.save()
@@ -3130,6 +3183,8 @@
 
     function drawPlayer() {
       const player = state.player
+      context.save(); context.fillStyle = "rgba(24,20,12,0.35)"
+      context.beginPath(); context.ellipse(player.x + 7, player.y + 12, 20, 8, 0, 0, Math.PI * 2); context.fill(); context.restore()
       if (window.WASTELAND_CHARACTER_ART?.drawPlayer(context, player, {
         gun: { scaleX: state.weapon.id === "submachineGun" ? .8 : 1 },
         drawWeapon: () => drawWeapon(player, false),
@@ -3286,6 +3341,7 @@
         level: state.level, xp: state.xp, nextXp: state.nextXp, kills: state.kills,
         enemies: state.enemies.length, projectiles: state.projectiles.length, pickups: state.pickups.length,
         loot: state.loot.map(item => ({ ...item })), combatDrops: state.combatDrops.map(item => ({ ...item })), bag: state.bag.map(item => ({ ...item })), bagCapacity: state.bagCapacity, safe: state.safe.map(item => ({ ...item })), equipment: { ...state.equipment }, inventoryWeight: inventoryWeight(), inventoryValue: inventoryValue(), bagPanelOpen: !!state.bagPanelOpen, searchPanel: state.searchPanel ? { boxId: state.searchPanel.id, entries: state.searchPanel.entries.map(entry => ({ ...entry })), elapsed: searchElapsed(state.searchPanel) } : null, extractedLoot: state.extractedLoot.map(item => ({ ...item })), extraction: state.extraction ? { ...state.extraction } : null, scene: state.scene, stage: state.scene, worldVersion: 3, weapon: { ...state.weapon }, throwables: { ...state.throwables }, activeThrowableId: state.activeThrowableId, modifiers: modifiers(),
+        camera: state.camera ? { ...state.camera } : null,
         worldLayer: state.worldLayer,
         activeHouseId: state.activeHouseId,
         houses: [...state.houseRooms.values()].map(room => ({ id: room.houseId, worldBounds: room.worldBounds ? { ...room.worldBounds } : null, roofVisible: state.activeHouseId !== room.houseId, interiorVisible: state.activeHouseId === room.houseId })),
@@ -3489,6 +3545,7 @@
       const rect = ui.joystick.getBoundingClientRect()
       let x = event.clientX - (rect.left + rect.width / 2)
       let y = event.clientY - (rect.top + rect.height / 2)
+      const local = rotateInputVector(x, y); x = local.x; y = local.y
       const radius = rect.width * .36
       const length = Math.hypot(x, y)
       if (length > radius) { x *= radius / length; y *= radius / length }
@@ -3539,7 +3596,7 @@
         catch { toast("浏览器未提供剪贴板权限") }
       })
       window.__LAST_NIGHT_DEBUG__ = Object.freeze({
-        snapshot, spawnLoot, spawnCombatDrop, tryCollectLoot, takeSupply, interact, searchSupplyBox, openSupplyBox, openSearchWindow, closeSearchWindow, takeSearchItem, takeAllSearchItems, toggleBagPanel, reorderBag, transferInventory, organizeBag, rotateBagItem, splitBagItem, confirmLock, unequipItem, availableAmmo, dropBagItem, useBagItem, carrySupply, reloadWeapon, useThrowable, updateExtractionState, takeDamage, enterBuilding, exitBuilding, stashList: loadStash, depositToStash, bringFromStash, discardStash, togglePendingBring, get pendingBring() { return [...pendingBring] }, get state() { return state }, get config() { return { ...CONFIG } }, get build() { return build }, get map() { return city },
+        snapshot, spawnLoot, spawnCombatDrop, tryCollectLoot, takeSupply, interact, searchSupplyBox, openSupplyBox, openSearchWindow, closeSearchWindow, takeSearchItem, takeAllSearchItems, toggleBagPanel, reorderBag, transferInventory, organizeBag, rotateBagItem, splitBagItem, confirmLock, unequipItem, availableAmmo, dropBagItem, useBagItem, carrySupply, reloadWeapon, useThrowable, updateExtractionState, takeDamage, enterBuilding, exitBuilding, stashList: loadStash, depositToStash, bringFromStash, discardStash, togglePendingBring, shellRotated, rotateInputVector, requestLandscapeLock, get pendingBring() { return [...pendingBring] }, get state() { return state }, get config() { return { ...CONFIG } }, get build() { return build }, get map() { return city },
         get loot() { return state.loot }, get combatDrops() { return state.combatDrops }, get bag() { return state.bag }, get supplyItems() { return Loot.supplyItems }, get houses() { return houseSystem }, get modifiers() { return modifiers() },
         get searchPanel() { return state.searchPanel }, get bagPanelOpen() { return !!state.bagPanelOpen },
         get artStatus() { return window.WASTELAND_CHARACTER_ART?.status || "unconfigured" },

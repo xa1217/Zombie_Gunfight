@@ -670,8 +670,25 @@
     function drawScenery(context, item) {
       context.save()
       context.lineJoin = "round"
-      // If the image has not arrived, the detailed Canvas art remains playable.
-      if (item.type === "building") { drawBuilding(context, item); context.restore(); return }
+      // Alien-Shooter-style high-angle view: every tall block reads as a solid,
+      // not a flat poster. A southeast cast shadow grounds it, a darker south
+      // wall band gives it height below the facade, and a thin east face gives
+      // it thickness. Collision still uses the flat footprint; this is visual
+      // depth only, and Y-sort keeps actors in front when they pass south.
+      if (item.type === "building") {
+        const b = item.building, wallH = 20 * sy, depth = 10 * sx
+        context.fillStyle = "rgba(24,20,12,0.30)"
+        context.fillRect(b.x + 16 * sx, b.y + 20 * sy, b.width, b.height + wallH)
+        drawBuilding(context, item)
+        rect(context, b.x, b.y + b.height, b.width, wallH, "#7a6448", ink, 2 * scale)
+        line(context, b.x + 2 * sx, b.y + b.height + 2 * sy, b.x + b.width - 2 * sx, b.y + b.height + 2 * sy, "#c8b489", 1.5 * scale)
+        polygon(context, [[b.x + b.width, b.y + 6 * sy], [b.x + b.width + depth, b.y - 2 * sy], [b.x + b.width + depth, b.y + b.height + wallH - 2 * sy], [b.x + b.width, b.y + b.height + wallH]], "#5d4f38", ink, 2 * scale)
+        context.restore(); return
+      }
+      if (item.type === "tree") {
+        context.fillStyle = "rgba(24,20,12,0.28)"
+        context.beginPath(); context.ellipse(item.x + item.width / 2 + 14 * sx, item.y + item.height - 4 * sy, item.width * .34, 7 * sy, 0, 0, Math.PI * 2); context.fill()
+      }
       const drawn = art && art.drawEnvironment(context, item.index, item.x, item.y, item.width, item.height)
       if (!drawn) {
         if (item.type === "building") drawFallbackBuilding(context, item)
