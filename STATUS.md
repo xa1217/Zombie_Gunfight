@@ -3,6 +3,14 @@
 **LAST NIGHT SURVIVOR**  
 更新时间：2026-10-15（Asia/Shanghai）
 
+## 2026-11-02 阿皮玩法续抄：局外仓库 + 新物资（分支 apipi-stash-20261102，待上 main）
+
+- 差距盘点：搜索/背包/安全箱/保险锁/撤离/负重/口径弹药等阿皮可观察玩法此前已在本项目落地；真正缺失的核心循环是局外仓库——此前胜利只保存本局快照、死亡只保留安全箱，均不跨局。
+- 新增局外仓库：胜利带回背包+安全箱、死亡保留安全箱，自动存入浏览器 localStorage（键 last-night-stash-v1，上限 60 件，可堆叠合并、溢出分条存放）；主界面与结算界面展示仓库（图标、品质、数量、价值、总价值），点「带入」后下一局开局装进道具包，装不下的留在仓库；另有「丢弃」。结算界面新增带回物资分组明细与存入件数。
+- 新增物资与画风美术：录屏中出现过的火柴（1×1 贵重物）补入工具柜掉落池；筋膜枪不再复用吹风机图标，改按本项目画风（粗深色描边、扁平暖色块、暖土色系，与手绘环境/角色图集同源）新绘独立矢量图。火柴价值/重量、仓库容量均为原型数值，非已核验原作数据，已在 README/REFERENCE-APIPI.md 标注边界。
+- 回归：validate PASS；loot / combat / item-integration / throwable-inventory / spawn-schedule / landscape-controls / character-motion / door-combat / item-effects / character-anatomy / 新 stash-smoke 均 PASS（stash-smoke 覆盖存入合并、上限 60、死亡仅存安全箱、结算明细、带入进下一局）。
+- 未动：窗户入侵（此前已证实不生效，待用户定修复方案）、PVP、交易/商店（仓库只有存取与丢弃，尚无出售换货币的消费口）、微信真机。
+
 ## 2026-10-23 集成记录（xa1217/Zombie_Gunfight）
 
 - 按《尸潮：最后一夜》计划书接棒：最新功能基线 `work/codex/reload-speed-20261014@41da623`（源在 honru09/JiangShi_Gun_Game）已集成到本仓库 main 线：按枪换弹（9 把枪各有 reloadTime）、手雷/燃烧瓶右侧双独立按钮（各上限 5、手动一次性消耗、满库存保留地面物）、底部旧道具栏移除、捕兽夹/灭火器不再掉落。
